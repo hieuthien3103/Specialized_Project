@@ -127,14 +127,48 @@ class Route:
     def __len__(self) -> int:
         return len(self.stops)
 
+    def can_serve(self, p: int, d: int) -> bool:
+        """Điều kiện khả thi SƠ BỘ của việc phục vụ cặp (p, d) trên xe này.
+
+        Chỉ kiểm tra: sức chứa còn đủ, và cặp lấy–giao có thời gian hợp lệ nếu
+        xe chạy thẳng từ kho (bỏ qua các nút đã có trong lộ trình). Đây là điều
+        kiện *cần thiết*, nên tập xe trả về là superset của tập xe thực sự
+        khả thi — dùng cho thành phần ω_4 của công thức (2.3) với chi phí O(1)
+        thay vì gọi `best_insertion` (O(m²)) cho mọi xe.
+        """
+        nodes, tt = self._nodes, self._tt
+        demand = nodes[p].demand + nodes[d].demand
+        if demand > self._cap + EPS:
+            return False
+        t = max(self._nodes[0].e, nodes[p].e)
+        if t > nodes[p].l + EPS:
+            return False                      # không tới được điểm lấy đúng hạn
+        arr_p = t + tt[0][p]
+        if arr_p > nodes[p].l + EPS:
+            return False
+        arr_d = arr_p + nodes[p].s + tt[p][d]
+        if arr_d > nodes[d].l + self.params.late_max + EPS:
+            return False                      # giao trễ quá L̄
+        return True
+
     def copy(self) -> "Route":
         return Route(self.inst, self.params, self.stops)
 
     # ------------------------------------------------------------ chèn / loại
-    def best_insertion(self, p: int, d: int):
+    def best_insertion(self, p: int, d: int, min_pos: int = 0,
+                       noise: float = 0.0, rng=None, dmax: float = 0.0):
         """Vị trí chèn tốt nhất cặp (p, d) -> (Δ chi phí, i, j) hoặc None.
 
         Thứ tự sau khi chèn: stops[:i] + [p] + stops[i:j] + [d] + stops[j:], i ≤ j.
+
+        Tham số:
+            min_pos: chỉ xét các vị trí chèn từ `min_pos` trở đi. Dùng cho cơ chế
+                đóng băng (mục 2.2.3): `min_pos` = độ dài tiền tố đã đóng băng,
+                nên ALNS chỉ được thay đổi phần tự do của lộ trình.
+            noise:  η trong công thức (2.5). Khi η > 0, mỗi Δ ứng viên được cộng
+                nhiễu `η·dmax·ε`, ε ~ U(−1, 1), và chọn theo Δ′ = max{0, Δ + nhiễu}.
+                Cần truyền `rng` và `dmax` (khoảng cách lớn nhất giữa hai điểm).
+
         Cắt tỉa: (1) bỏ i nếu không đến p được; (2) dừng tăng j khi đoạn
         p→stops[i..j-1] đã vi phạm; (3) khi thời điểm rời nút trùng với lộ
         trình gốc thì phần đuôi giữ nguyên nên cộng luôn phần còn lại.
@@ -147,7 +181,7 @@ class Route:
         dep, rem_d, rem_l = self.dep, self.rem_d, self.rem_l
         best, best_delta = None, INF
 
-        for i in range(m + 1):
+        for i in range(min_pos, m + 1):
             prev0, t0, load0, d0, l0 = pre[i]
             r = serve(prev0, t0, load0, p)
             if r is None:
@@ -186,6 +220,9 @@ class Route:
                             d2 += dist[pv][0]
                     if ok:
                         delta = alpha * (d2 - base_d) + gamma * (l2 - base_l)
+                        if noise > 0.0:
+                            eps = rng.uniform(-1.0, 1.0)
+                            delta = max(0.0, delta + noise * dmax * eps)
                         if delta < best_delta - 1e-12:
                             best_delta, best = delta, (delta, i, j)
                 if j == m:

@@ -12,7 +12,8 @@ Bố cục module (xem README.md ở thư mục gốc):
     evaluation/      – chỉ số đánh giá và kiểm định thống kê
 """
 from .instance import (Instance, Node, degree_of_dynamism, dynamize,
-                       generate_synthetic, parse_lilim, write_lilim)
+                       effective_dynamism, generate_synthetic, parse_lilim,
+                       write_lilim)
 from .route import InfeasibleRoute, Params, Route
 from .solution import Solution, insert_request
 from .baselines import greedy_insertion, regret_insertion
@@ -20,7 +21,8 @@ from .checker import Report, validate
 
 __all__ = [
     "Instance", "Node", "parse_lilim", "write_lilim", "generate_synthetic",
-    "dynamize", "degree_of_dynamism", "Params", "Route", "InfeasibleRoute",
+    "dynamize", "degree_of_dynamism", "effective_dynamism", "Params", "Route",
+    "InfeasibleRoute",
     "Solution", "insert_request", "greedy_insertion", "regret_insertion",
     "validate", "Report",
 ]

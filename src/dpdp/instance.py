@@ -137,24 +137,45 @@ def dynamize(inst: Instance, rho: float, lead_time: float = 0.0,
              seed: int = 0) -> dict[int, float]:
     """Gán thời điểm xuất hiện τ_r cho từng yêu cầu (khoá = id nút lấy).
 
-    Một tỷ lệ ρ yêu cầu được chọn ngẫu nhiên làm yêu cầu động, τ_r được rút
-    đều trong [0, l_p − t(0,p) − Λ]; số còn lại có τ_r = 0.
-    LƯU Ý: hãy đối chiếu công thức này với công thức ở mục 1.3.1 của báo cáo
-    và sửa cho khớp nếu khác.
+    Theo mục 1.3.1 của báo cáo: với mức độ động mục tiêu ρ, chọn ngẫu nhiên
+    ⌈ρ·n⌉ yêu cầu làm yêu cầu động và gán
+
+        τ_r ~ U[0, max{0, l_r − t_0r − Λ}]        (công thức 1.3)
+
+    với l_r là hạn muộn nhất của điểm lấy, t_0r là thời gian di chuyển từ kho
+    tới điểm lấy và Λ là thời gian dẫn tối thiểu (lead time). Các yêu cầu còn
+    lại có τ_r = 0.
+
+    Hạt giống `seed` được cố định để quy trình động hoá tái lập được.
     """
+    if not 0.0 <= rho <= 1.0:
+        raise ValueError("rho phải nằm trong [0, 1]")
     rng = random.Random(seed)
     reqs = inst.requests
-    chosen = set(rng.sample(range(len(reqs)), round(rho * len(reqs))))
+    n_dyn = math.ceil(rho * len(reqs))
+    chosen = set(rng.sample(range(len(reqs)), n_dyn))
     release: dict[int, float] = {}
     for idx, p in enumerate(reqs):
         if idx in chosen:
-            hi = inst.nodes[p].l - inst.tt[0][p] - lead_time
-            release[p] = rng.uniform(0.0, hi) if hi > 0 else 0.0
+            hi = max(0.0, inst.nodes[p].l - inst.tt[0][p] - lead_time)
+            release[p] = rng.uniform(0.0, hi)
         else:
             release[p] = 0.0
     return release
 
 
 def degree_of_dynamism(release: dict[int, float]) -> float:
-    """ρ thực tế = tỷ lệ yêu cầu có τ_r > 0 (Định nghĩa 1.3)."""
+    """ρ = |R_dyn| / |R| — tỷ lệ yêu cầu có τ_r > 0 (Định nghĩa 1.3)."""
     return sum(1 for v in release.values() if v > 0) / max(1, len(release))
+
+
+def effective_dynamism(release: dict[int, float], horizon: float) -> float:
+    """ρ_eff = (1/|R|) Σ_{r∈R_dyn} τ_r / T_H — mức độ động hiệu dụng (1.2).
+
+    Bổ sung ảnh hưởng của *thời điểm* xuất hiện: một yêu cầu đến muộn có ít
+    thời gian xử lý hơn, nên ρ_eff bổ sung thông tin mà ρ không nắm được.
+    """
+    if horizon <= 0:
+        return 0.0
+    n = max(1, len(release))
+    return sum(tau for tau in release.values() if tau > 0) / (n * horizon)

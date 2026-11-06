@@ -30,7 +30,12 @@ Specialized_Project/
 │   ├── checker.py          # bộ kiểm tra ĐỘC LẬP tính hợp lệ (2.11)–(2.19)
 │   ├── paths.py            # đường dẫn chuẩn: data/, experiments/
 │   ├── cli.py              # `python -m dpdp.cli` / lệnh `dpdp`
-│   ├── alns/               # (giai đoạn 4) toán tử phá huỷ/sửa chữa, trọng số, SA
+│   ├── alns/               # engine ALNS-D: toán tử, trọng số, SA, ngân sách
+│   │   ├── config.py       #   tham số ALNS (Bảng 2.4)
+│   │   ├── operators.py    #   2.1.3–2.1.4 phá huỷ/sửa chữa
+│   │   ├── weights.py      #   2.1.5 trọng số thích nghi (2.6), (2.7)
+│   │   ├── acceptance.py   #   2.1.6 tiêu chuẩn chấp nhận SA (2.8), (2.9)
+│   │   └── engine.py       #   2.2.5 vòng lặp theo ngân sách thời gian
 │   ├── adaptations/        # (giai đoạn 4) đóng băng, bộ lọc ứng viên
 │   ├── des/                # (giai đoạn 4) khung mô phỏng sự kiện rời rạc
 │   └── evaluation/         # (giai đoạn 6) chỉ số mục 1.4, kiểm định Wilcoxon
@@ -82,14 +87,34 @@ Terminal) kèm mã commit và thời điểm chạy.
 
 | Mục báo cáo | Mã nguồn | Thực nghiệm |
 |---|---|---|
-| 1.3.1 động hoá dữ liệu Li & Lim | `instance.py` (`dynamize`, `degree_of_dynamism`) | H4 |
+| 1.3.1 động hoá dữ liệu Li & Lim | `instance.py` (`dynamize`, `degree_of_dynamism`, `effective_dynamism`) | H4 |
 | 1.4 tiêu chí đánh giá (5 nhóm) | `evaluation/metrics.py` | tất cả |
-| 2.1.3–2.1.5 toán tử, trọng số, chấp nhận | `alns/` | H3 |
+| 2.1.3–2.1.6 toán tử, trọng số, chấp nhận | `alns/` | H3 |
 | 2.2.1 mô hình & ràng buộc (2.11)–(2.19) | `route.py`, `checker.py` | — |
 | 2.2.2 DES + tái tối ưu theo chu kỳ (Thuật toán 2.2) | `des/` | H4 |
 | 2.2.3 đóng băng phần lộ trình (2.20) | `adaptations/freezing.py` | H1 |
 | 2.2.4 bộ lọc ứng viên (2.21)–(2.23) | `adaptations/filter.py` | H2 |
 | 2.2.5 ngân sách thời gian (2.24)–(2.26) | `alns/engine.py` | H3 |
+
+## Kết quả tham chiếu
+
+ALNS-D (ngân sách 2 s/chu kỳ, seed 1) trên nhóm Solomon C1xx của bộ Li & Lim
+(10 xe, khung thời gian cứng ở điểm lấy):
+
+| Thể hiện | greedy | ALNS-D | Giảm |
+|---|---|---|---|
+| lc101 | 828,94 | **828,94** | 0 |
+| lc102 | 904,54 | **828,94** | −8,4 % |
+| lc103 | 1125,81 | **827,86** | −26,5 % |
+| lc104 | 1276,11 | **1133,44** | −11,2 % |
+| lc105 | 828,94 | **828,94** | 0 |
+| lc106 | 1111,64 | **828,94** | −25,5 % |
+| lc107 | 852,95 | **828,94** | −2,8 % |
+| lc108 | 855,74 | **826,44** | −3,4 % |
+| lc109 | 1159,19 | **827,82** | −28,6 % |
+
+ALNS-D đạt 828,94 — giá trị tối ưu chung của nhóm C1xx — trên lc101, lc102,
+lc105, lc106, lc107; ở lc106 còn giảm số xe dùng từ 11 xuống 10.
 
 ## Tình trạng
 
@@ -97,7 +122,7 @@ Terminal) kèm mã commit và thời điểm chạy.
 |---|---|
 | Đọc Li & Lim, lộ trình, chèn/loại, checker | ✅ xong (10/10 kiểm thử) |
 | Đối chứng greedy / regret-2 | ✅ xong |
-| ALNS (toán tử, trọng số, SA) | ⬜ giai đoạn 4 |
+| ALNS (toán tử, trọng số, SA) | ✅ xong (14/14 kiểm thử) |
 | Đóng băng, bộ lọc ứng viên | ⬜ giai đoạn 4 |
 | Khung DES | ⬜ giai đoạn 4 |
 | Chỉ số + kiểm định Wilcoxon | ⬜ giai đoạn 6 |
