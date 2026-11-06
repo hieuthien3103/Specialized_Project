@@ -5,7 +5,7 @@ import random
 import sys
 import tempfile
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from dpdp import (InfeasibleRoute, Params, Route, Solution, degree_of_dynamism,
                   dynamize, generate_synthetic, greedy_insertion, insert_request,

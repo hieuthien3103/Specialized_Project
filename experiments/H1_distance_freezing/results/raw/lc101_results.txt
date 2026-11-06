@@ -1,0 +1,4 @@
+lc101: 53 yêu cầu, K=25, Q=200, L̄=0
+thuật toán    phục vụ  từ chối  số xe   quãng đường   độ trễ    mục tiêu    giây  hợp lệ
+greedy             53        0     10        828.94     0.00      828.94    0.01  OK
+regret-2           53        0     13       1411.88     0.00     1411.88    0.02  OK

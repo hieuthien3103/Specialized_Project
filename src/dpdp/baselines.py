@@ -1,76 +1,21 @@
-"""Lời giải và các thuật toán chèn đối chứng (bước 3 trong kế hoạch).
+"""Các thuật toán chèn đối chứng (bước 3 trong kế hoạch).
 
-- greedy_insertion : mỗi bước chọn cặp (yêu cầu, xe, vị trí) có Δ chi phí nhỏ nhất.
+- greedy_insertion : mỗi bước chọn cặp (yêu cầu, xe, vị trí) có Δ chi phí nhất.
 - regret_insertion : mỗi bước chèn yêu cầu có "hối tiếc bậc g" lớn nhất (g = 2 mặc định);
                      yêu cầu chỉ chèn được vào ít hơn g xe được ưu tiên (Ropke & Pisinger [8]).
-- insert_request   : chèn MỘT yêu cầu mới vào lời giải hiện có; dùng lại ở
-                     bước mô phỏng động và làm toán tử sửa chữa của ALNS.
 
 Hiệu năng: lưu đệm Δ tốt nhất theo (yêu cầu, xe); sau mỗi lần chèn chỉ tính lại
 cho đúng xe vừa thay đổi.
+
+`Solution` và `insert_request` nằm ở `solution.py` để dùng chung với engine ALNS.
 """
 from __future__ import annotations
 
 from .instance import Instance
-from .route import INF, Params, Route
+from .route import INF, Params
+from .solution import Solution
 
-
-class Solution:
-    def __init__(self, inst: Instance, params: Params, num_vehicles: int | None = None):
-        self.inst = inst
-        self.params = params
-        k = inst.num_vehicles if num_vehicles is None else num_vehicles
-        self.routes = [Route(inst, params) for _ in range(k)]
-        self.unassigned: set[int] = set()     # id nút lấy của yêu cầu bị từ chối
-
-    # --- chỉ số ---
-    @property
-    def distance(self) -> float:
-        return sum(r.total_dist for r in self.routes)
-
-    @property
-    def lateness(self) -> float:
-        return sum(r.total_late for r in self.routes)
-
-    @property
-    def vehicles_used(self) -> int:
-        return sum(1 for r in self.routes if r.stops)
-
-    @property
-    def n_served(self) -> int:
-        return sum(len(r.stops) for r in self.routes) // 2
-
-    @property
-    def cost(self) -> float:
-        p = self.params
-        return (p.alpha * self.distance + p.gamma * self.lateness
-                + p.beta * len(self.unassigned))
-
-    def as_lists(self) -> list[list[int]]:
-        return [list(r.stops) for r in self.routes]
-
-    def copy(self) -> "Solution":
-        s = Solution.__new__(Solution)
-        s.inst, s.params = self.inst, self.params
-        s.routes = [r.copy() for r in self.routes]
-        s.unassigned = set(self.unassigned)
-        return s
-
-
-def insert_request(sol: Solution, p: int):
-    """Chèn yêu cầu p vào vị trí rẻ nhất trong mọi xe. Trả về (k, Δ) hoặc None."""
-    d = sol.inst.delivery_of(p)
-    best = None
-    for k, route in enumerate(sol.routes):
-        v = route.best_insertion(p, d)
-        if v is not None and (best is None or v[0] < best[0]):
-            best = (v[0], k, v[1], v[2])
-    if best is None:
-        return None
-    delta, k, i, j = best
-    sol.routes[k].insert(p, d, i, j)
-    sol.unassigned.discard(p)
-    return k, delta
+__all__ = ["greedy_insertion", "regret_insertion"]
 
 
 def _sequential_insertion(sol: Solution, pending: list[int], select) -> Solution:

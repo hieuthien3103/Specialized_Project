@@ -1,0 +1,3 @@
+input,instance,seed,vehicles,capacity,late_max,algorithm,served,rejected,vehicles_used,distance,lateness,objective,seconds,valid,commit,timestamp,python
+/home/thiennph/Documents/Project/Specialized_Project/data/lilim/lc101.txt,lc101,,25,200.0,0.0,greedy,53,0,10,828.94,0.00,828.94,0.0114,True,6c221c3,2026-11-06T16:37:25+00:00,3.12.3
+/home/thiennph/Documents/Project/Specialized_Project/data/lilim/lc101.txt,lc101,,25,200.0,0.0,regret-2,53,0,13,1411.88,0.00,1411.88,0.0155,True,6c221c3,2026-11-06T16:37:25+00:00,3.12.3

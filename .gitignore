@@ -3,12 +3,21 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+.pytest_cache/
+*.egg-info/
+build/
+dist/
 
-# Generated experiment outputs
-dpdp_project/results/
+# Kết quả thực nghiệm cũ (sinh dữ liệu giả, không dùng để báo cáo)
+legacy/
+
+# Kết quả chạy tạm khi gỡ lỗi — kết quả chính nằm trong experiments/*/results/raw/
+tmp/
+scratch/
 
 # Editor and office temporary files
 .~lock.*
+~$*
 
-# Compressed copy of the Li & Lim dataset
-pdp_100.zip
+# Dữ liệu thô lớn tải từ ngoài (mã nguồn Li & Lim nằm trong data/lilim)
+*.zip

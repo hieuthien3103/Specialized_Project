@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dpdp-alns"
+version = "0.1.0"
+description = "Khung mô phỏng DES và ALNS-D cho bài toán giao nhận hàng động (DPDP)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [
+    { name = "Đỗ Trọng Tín" },
+    { name = "Nguyễn Phạm Hiếu Thiện" },
+]
+
+# Mã lõi chỉ dùng thư viện chuẩn của Python.
+dependencies = []
+
+[project.optional-dependencies]
+# Thống kê (kiểm định Wilcoxon) và vẽ biểu đồ cho Chương 3.
+stats = ["scipy>=1.10"]
+plots = ["matplotlib>=3.7"]
+dev = ["pytest>=7.4"]
+all = ["scipy>=1.10", "matplotlib>=3.7", "pytest>=7.4"]
+
+[project.scripts]
+dpdp = "dpdp.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
