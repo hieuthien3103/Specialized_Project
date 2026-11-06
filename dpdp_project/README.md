@@ -12,6 +12,23 @@ Python ≥ 3.10, **không cần thư viện ngoài** (chỉ thư viện chuẩn)
 | `dpdp/cli.py` | Chạy hai thuật toán và in bảng kết quả | |
 | `tests/test_core.py` | 10 kiểm thử | |
 
+## Ánh xạ với thực nghiệm H1–H4
+
+Thư mục này chứa mã lõi dùng chung; không sao chép mã thành bốn phiên bản.
+Các cấu hình, kết quả và phân tích theo giả thuyết nằm trong
+[`../experiments/`](../experiments/).
+
+| Giả thuyết | Mã đang dùng hoặc cần mở rộng | Dữ liệu/kết quả |
+|---|---|---|
+| H1 — đóng băng và quãng đường | `route.py`, `baselines.py`, `checker.py`, `cli.py` | `experiments/H1_distance_freezing/` |
+| H2 — bộ lọc ứng viên | `route.py` và `cli.py` làm nền; cần bổ sung bộ lọc | `experiments/H2_candidate_filter/` |
+| H3 — trọng số thích nghi | `baselines.py` làm nền; cần bổ sung cập nhật trọng số | `experiments/H3_adaptive_weights/` |
+| H4 — mức độ động | `instance.py` (`dynamize`, `degree_of_dynamism`), `cli.py` | `experiments/H4_dynamism/` |
+
+H2 và H3 hiện mới có thư mục tổ chức thực nghiệm, chưa có implementation
+tương ứng trong mã lõi. Không nên coi kết quả baseline hiện tại là kết quả
+kiểm chứng H1–H4 hoàn chỉnh.
+
 ## Chạy
 ```
 python tests/test_core.py
