@@ -18,11 +18,15 @@ python3 experiments/H1_distance_freezing/scripts/run_h1.py \
 python3 experiments/H1_distance_freezing/analysis/analyze_h1.py
 ```
 
-Hai thuật toán dùng cùng instance, seed, mức độ động, ngân sách và đội xe:
+Hai thuật toán dùng cùng instance, seed, mức độ động, ngân sách và đội xe.
+Mặc định thực nghiệm H1 dùng `--vehicles 5` thay vì K=25 của file Li & Lim,
+để tạo không gian tái tối ưu có ràng buộc; giá trị này phải được báo cáo cùng
+kết quả:
 
 - `greedy`: chèn tham lam ban đầu và gán yêu cầu mới khi xuất hiện;
 - `alns_freezing`: ALNS-D tái tối ưu khi yêu cầu mới xuất hiện, với phần route
-  đã cam kết bị đóng băng.
+  đã cam kết bị đóng băng. Kết quả còn ghi `route_changes` và
+  `improved_reoptimizations` để xác minh ALNS thực sự tác động trong DES.
 
 Kết quả từng cặp nằm ở `results/raw/h1_paired_results.csv`; bảng tổng hợp nằm
 ở `analysis/tables/h1_summary.csv`. H1 chỉ được đánh giá sau khi chạy trên

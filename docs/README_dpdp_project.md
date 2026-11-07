@@ -1,4 +1,4 @@
-# Ghi chú mã lõi `src/dpdp/` (giai đoạn 1–3)
+# Ghi chú mã lõi `src/dpdp/` và thực nghiệm H1
 
 Python ≥ 3.10, **không cần thư viện ngoài** (chỉ thư viện chuẩn).
 
@@ -15,7 +15,9 @@ Python ≥ 3.10, **không cần thư viện ngoài** (chỉ thư viện chuẩn)
 | `src/dpdp/cli.py` | Chạy hai thuật toán và in bảng kết quả | |
 | `tests/test_core.py` | 10 kiểm thử | |
 
-Các gói `alns/`, `adaptations/`, `des/`, `evaluation/` là chỗ trống cho giai đoạn 4–6.
+Các gói `alns/`, `adaptations/` và `des/` đã có implementation cho ALNS-D,
+đóng băng và mô phỏng sự kiện rời rạc. Pipeline H1 nằm trong
+`experiments/H1_distance_freezing/`.
 
 ## Vai trò trong thực nghiệm H1–H4
 
@@ -30,9 +32,9 @@ nằm trong [`../experiments/`](../experiments/).
 | H3 — trọng số thích nghi | `baselines.py` làm nền; cần bổ sung cập nhật trọng số | `experiments/H3_adaptive_weights/` |
 | H4 — mức độ động | `instance.py` (`dynamize`, `degree_of_dynamism`), `cli.py` | `experiments/H4_dynamism/` |
 
-Hiện trạng: đã có nền tảng DPDP và baseline nhưng **chưa có** ALNS, mô phỏng sự kiện
-rời rạc, cơ chế đóng băng và bộ lọc ứng viên. Vì vậy, kết quả hiện tại **không
-phải** là kết quả kiểm chứng hoàn chỉnh cho H1–H4.
+Hiện trạng H1: đã có ALNS-D, DES, đóng băng, baseline greedy, kiểm tra nghiệm
+và pipeline chạy theo cặp. H1 vẫn là giả thuyết thực nghiệm, không phải kết
+luận được giả định trước.
 
 ## Chạy
 
@@ -70,8 +72,9 @@ Bộ Li & Lim **đã có** trong `data/lilim/` (56 file: lc*, lr*, lrc*). Parser
 - Kiểm tra chèn hiện là O(m) mỗi vị trí, có cắt tỉa và lối tắt "đuôi không đổi"; chưa dùng
   độ dãn thời gian O(1) như phân tích ở mục 2.2.7. Trên `lc101.txt`, mỗi thuật toán
   chạy ~0,01–0,02 giây. Nếu cần nhanh hơn thì tối ưu `Route.best_insertion`.
-- Chưa có: toán tử phá huỷ, vòng lặp ALNS, mô phỏng sự kiện rời rạc, đóng băng, bộ lọc ứng
-  viên. Đó là các bước 4–6; `Route.remove_request` và `insert_request` đã sẵn để làm nền.
+- Các toán tử phá/sửa, vòng lặp ALNS, mô phỏng sự kiện rời rạc và đóng băng đã
+  có trong `src/dpdp/alns/`, `src/dpdp/des/` và `src/dpdp/adaptations/`.
+  Bộ lọc ứng viên là phần mở rộng cho H2.
 - `generate_synthetic` chỉ để gỡ lỗi, **không dùng để báo cáo kết quả**.
 
 ## Ghi nhận từ thực nghiệm sơ bộ (2026-11)
@@ -89,9 +92,30 @@ Cần kiểm tra lại khi hiệu chỉnh tham số ở giai đoạn 5 (Bảng 2
 "chèn tham lam theo chi phí thấp nhất" với ALNS có đóng băng — nếu baseline quá mạnh
 thì khó khẳng định H1.
 
+## Kết quả kiểm định H1 hiện tại
+
+Đã chạy toàn bộ 56 instance Li & Lim (17 C, 23 R, 16 RC), 3 seed
+(`0,1,2`), `rho=0.5`, ngân sách `0.05` giây, chân trời `1000` và đội xe
+giới hạn `K=5`. Hai thuật toán dùng cùng instance, seed, release time và
+ngân sách; ALNS-D dùng đóng băng.
+
+Kết quả 168 cặp đều hợp lệ. ALNS-D thực sự thay đổi route ở 80/168 lần chạy
+và cải thiện objective ở 80/168 lần. Tuy nhiên:
+
+| Chỉ số | Greedy | ALNS-D + freezing | Wilcoxon (ALNS < greedy) |
+|---|---:|---:|---:|
+| Tổng quãng đường trung bình | 2699,176466 | 2703,249953 | p=0,07119516 |
+
+Chênh lệch trung bình là `+4,073487`, tức ALNS-D cao hơn greedy khoảng
+`0,1509%`. Vì `p > 0,05` và hướng chênh lệch không ủng hộ ALNS-D, **H1 chưa
+được chứng minh/ủng hộ trong cấu hình này**. Đây là kết luận trung thực của
+thực nghiệm, không phải lỗi pipeline. Kết quả nằm trong
+[`../experiments/H1_distance_freezing/`](../experiments/H1_distance_freezing/).
+
 ## Việc NÊN làm tiếp (theo thứ tự)
 
-1. Hiệu chỉnh `dynamize` theo công thức mục 1.3.1 (chặn H4).
-2. Chuẩn hoá thang phạt `beta` theo Nhận xét 2.4 (chặn H1–H3, tránh mục tiêu bị
-   chi phối bởi số đơn bị từ chối).
-3. Cài đặt `alns/` + `adaptations/freezing.py` → chạy H1.
+1. Mở rộng số seed và ngân sách theo thiết kế đã chốt, không thay đổi hậu
+   nghiệm để tìm kết quả có lợi.
+2. Chuẩn hoá thang phạt `beta` theo Nhận xét 2.4.
+3. Phân tích riêng theo họ C/R/RC và kiểm tra độ nhạy với `K`, `rho`, `B`.
+4. Hiệu chỉnh `dynamize` theo công thức mục 1.3.1.
