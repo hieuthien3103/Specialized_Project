@@ -1,0 +1,5 @@
+metric,pairs,greedy_mean,greedy_std,alns_freezing_mean,alns_freezing_std,alns_minus_greedy_mean,alns_improvement_percent,wilcoxon_p_less,significant_at_0.05
+total_distance,168,2699.176466,701.167716,2704.333297,722.135178,5.156830,-0.1911,0.048420631,yes
+total_lateness,168,0.000000,0.000000,0.000000,0.000000,0.000000,0.0000,1,no
+rejected,168,5.125000,4.817865,5.125000,4.817865,0.000000,0.0000,1,no
+seconds,168,0.016470,0.027390,0.509501,0.528640,0.493030,-2993.4310,2.4147681e-27,yes

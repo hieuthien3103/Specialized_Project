@@ -16,10 +16,10 @@ import time
 from pathlib import Path
 
 from .baselines import greedy_insertion, regret_insertion
-from .checker import validate
-from .instance import generate_synthetic, parse_lilim
+from .core.checker import validate
+from .core.instance import generate_synthetic, parse_lilim
 from .paths import lilim_dir, raw_results_dir, run_metadata
-from .route import Params
+from .core.route import Params
 
 DEFAULT_OUTPUT = raw_results_dir("H1_distance_freezing")
 

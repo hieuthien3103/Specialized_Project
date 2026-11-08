@@ -43,6 +43,7 @@ class ALNSConfig:
     segments_per_cycle: int = 1     # s_seg: số lần cập nhật trọng số mỗi chu kỳ
 
     # --- tiêu chuẩn chấp nhận (mục 2.1.6) ---
+    acceptance: str = "sa"          # "sa" | "hill_climbing" | "always"
     initial_acceptance: float = 0.05  # w_0
     final_temperature_ratio: float = 0.05  # Θ_f / Θ_0
 

@@ -10,14 +10,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from dpdp import Params, greedy_insertion, validate
 from dpdp.alns.acceptance import HillClimbing, SimulatedAnnealing
+from dpdp.alns.adapter import (DPDPState, make_destroy_operator,
+                               make_repair_operator)
 from dpdp.alns.config import ALNSConfig
 from dpdp.alns.engine import ALNSEngine
 from dpdp.alns.operators import (DESTROY_OPERATORS, REPAIR_OPERATORS,
                                  FreeContext, destroy_random, destroy_related,
                                  destroy_worst)
 from dpdp.alns.weights import OperatorWeights
-from dpdp.instance import generate_synthetic, parse_lilim
-from dpdp.solution import Solution
+from dpdp.core.instance import generate_synthetic, parse_lilim
+from dpdp.core.solution import Solution
 
 HARD = Params()
 
@@ -185,6 +187,60 @@ def test_engine_on_real_instance():
     rep = validate(inst, best.as_lists(), HARD, best.unassigned)
     assert rep.ok, rep.errors[:3]
     assert best.cost <= sol.cost + 1e-6
+
+
+def test_adapter_wraps_solution_as_alns_state():
+    """`DPDPState` phải thoả giao thức `alns.State` (chỉ cần `objective()`)."""
+    inst, sol = _setup(n=20, seed=7, vehicles=3)
+    state = DPDPState(solution=sol)
+    assert abs(state.objective() - sol.cost) < 1e-9
+
+
+def test_adapter_destroy_then_repair_is_valid():
+    """Chuỗi phá huỷ → sửa chữa qua adapter phải cho lời giải hợp lệ."""
+    import numpy as np
+    inst, sol = _setup(n=30, seed=8, vehicles=4)
+    cfg = ALNSConfig()
+    rng = np.random.default_rng(0)
+    state = DPDPState(solution=sol)
+
+    destroyed = make_destroy_operator("random", cfg)(state, rng)
+    assert destroyed.removed, "phải loại được ít nhất một yêu cầu"
+    for p in destroyed.removed:
+        assert p not in destroyed.solution.served_requests
+
+    repaired = make_repair_operator("greedy", cfg)(destroyed, rng)
+    rep = validate(inst, repaired.solution.as_lists(), HARD,
+                   repaired.solution.unassigned)
+    assert rep.ok, rep.errors[:3]
+
+
+def test_engine_uses_library_acceptance_and_selection():
+    """Cấu hình phải ánh xạ đúng sang thư viện `alns` (Bảng 2.4)."""
+    inst, sol = _setup(n=25, seed=9, vehicles=3)
+    cfg = ALNSConfig(budget=0.5, max_iterations=40, seed=1,
+                     reaction=0.1, segment_min=5)
+    engine = ALNSEngine(inst, HARD, cfg)
+    scheme = engine._select_scheme(cfg)
+    # decay = 1 − λ
+    assert abs(scheme.decay - (1.0 - cfg.reaction)) < 1e-12
+    assert list(scheme.scores) == [cfg.sigma_new_best, cfg.sigma_better,
+                                   cfg.sigma_accepted, 0.0]
+    assert scheme.seg_length == cfg.segment_min
+
+    accept = engine._accept_criterion(cfg, 100.0, 1000)
+    assert accept.start_temperature > 0
+    assert accept.end_temperature <= accept.start_temperature
+
+
+def test_engine_records_operator_weights():
+    """Thống kê phải trả về trọng số và điểm thưởng của từng toán tử."""
+    inst, sol = _setup(n=25, seed=10, vehicles=3)
+    cfg = ALNSConfig(budget=0.6, max_iterations=50, seed=1)
+    _, stats = ALNSEngine(inst, HARD, cfg).run(sol)
+    assert set(stats.weights) >= {"destroy:random", "destroy:worst",
+                                  "destroy:related", "repair:greedy"}
+    assert all(v > 0 for v in stats.weights.values())
 
 
 if __name__ == "__main__":

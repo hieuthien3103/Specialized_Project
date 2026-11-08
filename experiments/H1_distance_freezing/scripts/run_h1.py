@@ -15,10 +15,10 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 
 from dpdp.des import SimConfig, Simulator
-from dpdp.checker import validate
-from dpdp.instance import parse_lilim
+from dpdp.core.checker import validate
+from dpdp.core.instance import parse_lilim
 from dpdp.paths import lilim_dir, raw_results_dir, run_metadata
-from dpdp.route import Params
+from dpdp.core.route import Params
 
 
 def run_one(path: Path, seed: int, rho: float, budget: float,

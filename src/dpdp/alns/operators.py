@@ -21,8 +21,8 @@ import random
 from dataclasses import dataclass, field
 from typing import Callable
 
-from ..instance import Instance
-from ..solution import Solution
+from ..core.instance import Instance
+from ..core.solution import Solution
 
 # --------------------------------------------------------------- phá huỷ
 DestroyFn = Callable[[Solution, random.Random, "ALNSConfig", "FreeContext"], list[int]]
@@ -233,6 +233,22 @@ def _candidate_vehicles(sol: Solution, p: int) -> set[int]:
 
 
 # ------------------------------------------------------- trợ giúp loại tạm
+def remove_requests(sol: Solution, requests: list[int]) -> None:
+    """Loại các yêu cầu đã cho khỏi lời giải (đưa về trạng thái bị từ chối).
+
+    Đây là bước "phá huỷ" thực sự; các hàm `destroy_*` chỉ *chọn* danh sách
+    yêu cầu cần loại. Toán tử sửa chữa sẽ chèn lại chúng nếu còn khả thi.
+    """
+    inst = sol.inst
+    for p in requests:
+        d = inst.delivery_of(p)
+        for route in sol.routes:
+            if p in route.stops and d in route.stops:
+                route.remove_request(p, d)
+                break
+        sol.unassigned.add(p)
+
+
 def _remove_temporarily(sol: Solution, p: int, d: int):
     """Loại yêu cầu rồi trả về thông tin để khôi phục. None nếu không loại được."""
     for k, route in enumerate(sol.routes):

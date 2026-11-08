@@ -23,31 +23,26 @@ Mã lõi **chỉ dùng thư viện chuẩn của Python** (≥ 3.10). Các gói 
 Specialized_Project/
 ├── pyproject.toml          # cấu hình gói, entry point `dpdp`
 ├── src/dpdp/               # MÃ NGUỒN DUY NHẤT
-│   ├── instance.py         # đọc/ghi Li & Lim, sinh dữ liệu thử, động hoá (1.3.1)
-│   ├── route.py            # lộ trình một xe: chèn/loại, khả thi (2.2.1)
-│   ├── solution.py         # lời giải: tập lộ trình + yêu cầu bị từ chối
+│   ├── core/               # instance, route, solution, checker (nền, ít đổi)
 │   ├── baselines.py        # đối chứng: chèn tham lam, chèn regret-2
-│   ├── checker.py          # bộ kiểm tra ĐỘC LẬP tính hợp lệ (2.11)–(2.19)
 │   ├── paths.py            # đường dẫn chuẩn: data/, experiments/
 │   ├── cli.py              # `python -m dpdp.cli` / lệnh `dpdp`
-│   ├── alns/               # engine ALNS-D: toán tử, trọng số, SA, ngân sách
-│   │   ├── config.py       #   tham số ALNS (Bảng 2.4)
-│   │   ├── operators.py    #   2.1.3–2.1.4 phá huỷ/sửa chữa
-│   │   ├── weights.py      #   2.1.5 trọng số thích nghi (2.6), (2.7)
-│   │   ├── acceptance.py   #   2.1.6 tiêu chuẩn chấp nhận SA (2.8), (2.9)
-│   │   └── engine.py       #   2.2.5 vòng lặp theo ngân sách thời gian
-│   ├── adaptations/        # (giai đoạn 4) đóng băng, bộ lọc ứng viên
-│   ├── des/                # (giai đoạn 4) khung mô phỏng sự kiện rời rạc
-│   └── evaluation/         # (giai đoạn 6) chỉ số mục 1.4, kiểm định Wilcoxon
+│   ├── alns/               # config, operators, weights, acceptance, engine
+│   │   └── reference/      # import tương thích cho API cũ
+│   ├── adaptations/        # đóng băng, bộ lọc ứng viên
+│   ├── des/                # events, simulator
+│   └── evaluation/         # vị trí cho metrics, stats, runner
 ├── tests/                  # kiểm thử (pytest hoặc chạy trực tiếp)
 ├── data/
-│   ├── lilim/              # bộ dữ liệu Li & Lim (56 file)
-│   └── hcm/                # mạng lười đường TP.HCM (mục 1.3.3) — chưa có
+│   ├── README.md           # nguồn, ngày tải (nếu biết), checksum
+│   ├── lilim/              # dữ liệu Li & Lim gốc, không chỉnh sửa (56 file)
+│   ├── dynamic/            # dữ liệu có release time đã sinh
+│   └── hcm/{raw,processed}/# mạng đường TP.HCM
 ├── experiments/            # MỘT thư mục cho mỗi giả thuyết H1–H4
-│   └── H?_.../
+│   └── H1..H4/
 │       ├── configs/        # cấu hình YAML: instance, seed, ngân sách, biến thể
 │       ├── scripts/        # driver gọi API chung của src/dpdp
-│       ├── results/raw/    # kết quả thô: mỗi lần chạy một file CSV
+│       ├── results/        # kết quả thô và tổng hợp
 │       └── analysis/       # bảng tổng hợp, kiểm định thống kê
 ├── docs/                   # báo cáo, đề cương, ghi chú
 └── legacy/                 # kết quả cũ (không dùng để báo cáo) — bị git-ignore
@@ -63,8 +58,9 @@ Specialized_Project/
 3. **Biến thể bằng cấu hình, không bằng fork mã**: các cờ `use_freezing`,
    `use_filter`, `adaptive_weights`, ngân sách `B` nằm trong cấu hình ALNS.
    Nhờ vậy H1–H4 so sánh được *theo cặp* (paired test) trên cùng tập seed.
-4. **Dữ liệu**: `data/lilim/` chứa bộ Li & Lim gốc (đã tải về từ SINTEF);
-   `data/hcm/` dành cho mạng đường TP.HCM.
+4. **Dữ liệu**: `data/lilim/` là nguồn gốc không chỉnh sửa; dữ liệu phát sinh
+   lưu riêng trong `data/dynamic/`; `data/README.md` ghi provenance và checksum.
+   `data/hcm/raw/` và `data/hcm/processed/` tách dữ liệu HCM gốc và đã xử lý.
 
 ## Chạy thử
 

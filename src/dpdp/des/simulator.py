@@ -37,9 +37,9 @@ from ..adaptations.freezing import FreezingManager
 from ..alns.config import ALNSConfig
 from ..alns.engine import ALNSEngine
 from ..baselines import greedy_insertion
-from ..instance import Instance, dynamize
-from ..route import Params
-from ..solution import Solution
+from ..core.instance import Instance, dynamize
+from ..core.route import Params
+from ..core.solution import Solution
 from .events import EventQueue, EventType
 
 

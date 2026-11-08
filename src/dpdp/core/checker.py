@@ -30,7 +30,16 @@ class Report:
 
 
 def validate(inst: Instance, routes: list[list[int]], params: Params,
-             unassigned=()) -> Report:
+             unassigned=(), completed=()) -> Report:
+    """Kiểm tra tính hợp lệ của một lời giải.
+
+    Args:
+        inst, routes, params, unassigned: như cũ.
+        completed: tập yêu cầu đã được phục vụ và hoàn thành trong mô phỏng
+            nhưng không còn nằm trong lộ trình (đã chạy xong). Trong mô phỏng
+            DES, các yêu cầu này không còn xuất hiện trong `routes` nhưng vẫn
+            đã được phục vụ, nên không được coi là thiếu.
+    """
     errors: list[str] = []
     nodes = inst.nodes
     n = len(nodes)
@@ -93,6 +102,7 @@ def validate(inst: Instance, routes: list[list[int]], params: Params,
 
     # mỗi yêu cầu hoặc được phục vụ hoặc bị từ chối, không cả hai / không thiếu
     rejected = set(unassigned)
+    done = set(completed)
     for p in inst.requests:
         d = inst.delivery_of(p)
         served = p in seen
@@ -102,9 +112,12 @@ def validate(inst: Instance, routes: list[list[int]], params: Params,
             errors.append(f"yêu cầu {p}: điểm lấy và giao ở hai xe khác nhau")
         if served and p in rejected:
             errors.append(f"yêu cầu {p}: vừa được phục vụ vừa bị từ chối")
-        if not served and p not in rejected:
+        if p in done and (served or p in rejected):
+            errors.append(f"yêu cầu {p}: vừa hoàn thành vừa còn trong lời giải")
+        if not served and p not in rejected and p not in done:
             errors.append(f"yêu cầu {p}: không được phục vụ cũng không ghi nhận từ chối")
 
     n_served = sum(1 for p in inst.requests if p in seen)
+    n_served += len(done)
     return Report(ok=not errors, errors=errors, distance=total_d, lateness=total_l,
                   served=n_served, rejected=len(rejected), vehicles_used=used)

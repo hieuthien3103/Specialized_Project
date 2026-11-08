@@ -6,11 +6,11 @@ Python ≥ 3.10, **không cần thư viện ngoài** (chỉ thư viện chuẩn)
 
 | File | Vai trò | Ứng với báo cáo |
 |---|---|---|
-| `src/dpdp/instance.py` | Đọc/ghi file Li & Lim, sinh dữ liệu thử, `dynamize` | mục 1.3.1 |
-| `src/dpdp/route.py` | Lộ trình một xe, kiểm tra khả thi, tìm vị trí chèn tốt nhất, loại yêu cầu | mục 2.2.1, Bổ đề 2.1, Mệnh đề 1.2 |
-| `src/dpdp/solution.py` | `Solution` (tập lộ trình + yêu cầu bị từ chối), `insert_request` | dùng chung ALNS + DES |
+| `src/dpdp/core/instance.py` | Đọc/ghi file Li & Lim, sinh dữ liệu thử, `dynamize` | mục 1.3.1 |
+| `src/dpdp/core/route.py` | Lộ trình một xe, kiểm tra khả thi, tìm vị trí chèn tốt nhất, loại yêu cầu | mục 2.2.1, Bổ đề 2.1, Mệnh đề 1.2 |
+| `src/dpdp/core/solution.py` | `Solution` (tập lộ trình + yêu cầu bị từ chối), `insert_request` | dùng chung ALNS + DES |
 | `src/dpdp/baselines.py` | Chèn tham lam, chèn regret-2 | đối chứng ở mục "Công việc tiếp theo" |
-| `src/dpdp/checker.py` | Bộ kiểm tra độc lập (không dùng lại mã của `route.py`) | ràng buộc (2.11)–(2.19) |
+| `src/dpdp/core/checker.py` | Bộ kiểm tra độc lập (không dùng lại mã của `route.py`) | ràng buộc (2.11)–(2.19) |
 | `src/dpdp/paths.py` | Đường dẫn chuẩn `data/`, `experiments/`, metadata commit/timestamp | hỗ trợ tái lập |
 | `src/dpdp/cli.py` | Chạy hai thuật toán và in bảng kết quả | |
 | `tests/test_core.py` | 10 kiểm thử | |
@@ -18,6 +18,10 @@ Python ≥ 3.10, **không cần thư viện ngoài** (chỉ thư viện chuẩn)
 Các gói `alns/`, `adaptations/` và `des/` đã có implementation cho ALNS-D,
 đóng băng và mô phỏng sự kiện rời rạc. Pipeline H1 nằm trong
 `experiments/H1_distance_freezing/`.
+
+`evaluation/` hiện là package khung; các module `metrics.py`, `stats.py` và
+`runner.py` chưa được triển khai. Metadata và đường dẫn dùng chung nằm trong
+`src/dpdp/paths.py`.
 
 ## Vai trò trong thực nghiệm H1–H4
 
@@ -27,10 +31,10 @@ nằm trong [`../experiments/`](../experiments/).
 
 | Giả thuyết | Mã đang dùng hoặc cần mở rộng | Dữ liệu/kết quả |
 |---|---|---|
-| H1 — đóng băng và quãng đường | **Thực nghiệm chính**; hiện có `route.py`, `baselines.py`, `checker.py`, `cli.py` làm nền cho baseline và ALNS | `experiments/H1_distance_freezing/` |
-| H2 — bộ lọc ứng viên | `route.py` và `cli.py` làm nền; cần bổ sung bộ lọc | `experiments/H2_candidate_filter/` |
+| H1 — đóng băng và quãng đường | **Thực nghiệm chính**; hiện có `core/route.py`, `baselines.py`, `core/checker.py`, `cli.py` làm nền cho baseline và ALNS | `experiments/H1_distance_freezing/` |
+| H2 — bộ lọc ứng viên | `core/route.py` và `cli.py` làm nền; cần bổ sung bộ lọc | `experiments/H2_candidate_filter/` |
 | H3 — trọng số thích nghi | `baselines.py` làm nền; cần bổ sung cập nhật trọng số | `experiments/H3_adaptive_weights/` |
-| H4 — mức độ động | `instance.py` (`dynamize`, `degree_of_dynamism`), `cli.py` | `experiments/H4_dynamism/` |
+| H4 — mức độ động | `core/instance.py` (`dynamize`, `degree_of_dynamism`), `cli.py` | `experiments/H4_dynamism/` |
 
 Hiện trạng H1: đã có ALNS-D, DES, đóng băng, baseline greedy, kiểm tra nghiệm
 và pipeline chạy theo cặp. H1 vẫn là giả thuyết thực nghiệm, không phải kết

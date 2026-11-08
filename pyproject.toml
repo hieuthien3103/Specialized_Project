@@ -14,8 +14,8 @@ authors = [
     { name = "Nguyễn Phạm Hiếu Thiện" },
 ]
 
-# Mã lõi chỉ dùng thư viện chuẩn của Python.
-dependencies = []
+# Khung ALNS lấy từ thư viện mã nguồn mở `alns` của Wouda & Lan [20].
+dependencies = ["alns>=7.0.0"]
 
 [project.optional-dependencies]
 # Thống kê (kiểm định Wilcoxon) và vẽ biểu đồ cho Chương 3.

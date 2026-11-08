@@ -11,9 +11,9 @@ cho đúng xe vừa thay đổi.
 """
 from __future__ import annotations
 
-from .instance import Instance
-from .route import INF, Params
-from .solution import Solution
+from .core.instance import Instance
+from .core.route import INF, Params
+from .core.solution import Solution
 
 __all__ = ["greedy_insertion", "regret_insertion"]
 
