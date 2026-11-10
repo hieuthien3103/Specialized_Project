@@ -21,3 +21,11 @@ scratch/
 
 # Dữ liệu thô lớn tải từ ngoài (mã nguồn Li & Lim nằm trong data/lilim)
 *.zip
+
+# Ignore large raw datasets and virtual environment
+venv/
+*.zip
+*.osm
+*.pbf
+pdp_100/
+__pycache__/
