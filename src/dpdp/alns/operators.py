@@ -42,6 +42,7 @@ class FreeContext:
 
     min_pos: dict[int, int] = field(default_factory=dict)
     free_map: dict[int, set[int]] = field(default_factory=dict)
+    committed: frozenset[int] = frozenset()
 
     @property
     def constrained(self) -> bool:

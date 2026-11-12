@@ -1,39 +1,27 @@
-"""Khung mô phỏng sự kiện rời rạc của DPDP và tái tối ưu theo chu kỳ.
+"""Khung mô phỏng sự kiện rời rạc của DPDP và tái tối ưu theo sự kiện.
 
 Đây là **phần ghép** giữa khung ALNS (thư viện `alns`, Wouda & Lan [20]) và
 bài toán giao nhận hàng động — tức là một trong hai đóng góp còn lại của đề
 tài sau khi không viết lại thuật toán đã có.
 
-Kiến trúc tái tối ưu theo chu kỳ (Thuật toán 2.2 của báo cáo, mục 2.2.2):
+Luồng sự kiện được cài đặt:
 
-    ┌─ E_1: yêu cầu mới xuất hiện tại τ_r ─────────────────────────┐
-    │   chọn xe rảnh gần nhất; nếu không có xe rảnh → yêu cầu vào  │
-    │   hàng đợi chờ (R_pending)                                    │
-    │   xe được giao → khởi động chu kỳ tái tối ưu với ngân sách B   │
-    └────────────────────────────────────────────────────────────────┘
-    ┌─ E_2: phương tiện hoàn thành chặng ──────────────────────────┐
-    │   phần lộ trình đã cam kết được tiến lên; lấy yêu cầu đang    │
-    │   chờ từ hàng đợi nếu có xe rảnh                             │
-    └────────────────────────────────────────────────────────────────┘
-    ┌─ E_3: hết ngân sách tái tối ưu ──────────────────────────────┐
-    │   chốt lời giải; phần lô trình đã cam kết của mỗi xe được    │
-    │   đóng băng (mục 2.2.3)                                        │
-    └────────────────────────────────────────────────────────────────┘
-    ┌─ E_4: kết thúc mô phỏng (t = T_H) ────────────────────────────┐
-    │   trả về lời giải tốt nhất                                     │
-    └────────────────────────────────────────────────────────────────┘
+    E_1: yêu cầu xuất hiện tại τ_r; chèn và tái tối ưu ALNS ngay tại sự kiện.
+    E_4: kết thúc mô phỏng tại T_H.
 
-Ranh giới trách nhiệm: *ngân sách thời gian* B, *điều kiện dừng* và *tiêu
-chuẩn chấp nhận* do thư viện `alns` thực hiện (`MaxRuntime`,
-`SimulatedAnnealing`). Bộ điều khiển ở đây chỉ quyết định *khi nào* gọi một
-chu kỳ tái tối ưu và *làm gì* với lời giải sau đó.
+Mô phỏng này đánh giá kế hoạch lộ trình theo release time; nó không mô phỏng
+xe chạy vật lý hay sự kiện xe quay về kho.
+
+Ngân sách B là thời gian CPU tối đa cho từng lần tái tối ưu. Hệ số ς chỉ được
+dùng để tính chân trời đóng băng H=ςB+H₀; ALNS chưa làm đồng hồ mô phỏng tiến.
+Điều kiện dừng và tiêu chuẩn chấp nhận do thư viện `alns` thực hiện.
 """
 from __future__ import annotations
 
 import time as _time
 from dataclasses import dataclass, field
 
-from ..adaptations.freezing import FreezingManager
+from ..adaptations.freezing import FreezingConstraint
 from ..alns.config import ALNSConfig
 from ..alns.engine import ALNSEngine
 from ..baselines import greedy_insertion, regret_insertion
@@ -50,7 +38,7 @@ class SimConfig:
     horizon: float | None = None   # None = giờ đóng cửa kho của thể hiện
     rho: float = 0.3               # ρ: mức độ động (Định nghĩa 1.3)
     lead_time: float = 0.0         # Λ: thời gian dẫn tối thiểu
-    budget: float = 2.0            # B: ngân sách tái tối ưu mỗi chu kỳ (giây)
+    budget: float = 2.0            # B: ngân sách CPU mỗi lần tái tối ưu (giây)
     max_iterations: int = 10_000   # N_max
     seed: int = 0
     num_vehicles: int | None = None
@@ -58,6 +46,8 @@ class SimConfig:
     use_freezing: bool = True
     #: Biên an toàn H_0 của chân trời đóng băng.
     freeze_safety: float = 0.0
+    freeze_horizon: float = 0.0   # H_0 theo đơn vị thời gian của instance
+    time_scale: float = 1.0       # ς: thời gian mô phỏng / giây CPU
     #: Có dùng bộ lọc ứng viên (mục 2.2.4) hay không.
     use_filter: bool = False
     filter_kappa: int = 5
@@ -136,34 +126,8 @@ class SimResult:
         }
 
 
-@dataclass
-class _Vehicle:
-    """Trạng thái một phương tiện trong mô phỏng.
-
-    Mỗi xe chạy một *chuyến* gồm nhiều yêu cầu: `stops` là các yêu cầu xe
-    đang mang (theo thứ tự thời gian), `committed` là số nút đầu tiên đã
-    *thực thi* (không thể thay đổi nữa, Mệnh đề 2.3).
-    """
-
-    index: int
-    stops: list[int] = field(default_factory=list)
-    committed: int = 0
-    free_at: float = 0.0
-    position: int = 0            # nút hiện tại (0 = kho)
-    #: Phiên bản lịch hoàn thành chuyến; sự kiện lịch cũ sẽ bị bỏ qua.
-    schedule_token: int = 0
-    #: Chuỗi nút của chuyến đã xuất phát. Đây là snapshot vận hành, tách với
-    #: lời giải dự kiến để quãng đường/thời điểm hoàn thành không bị thay đổi
-    #: ngược bởi một vòng tái tối ưu sau đó.
-    route_snapshot: list[int] = field(default_factory=list)
-
-    @property
-    def free(self) -> bool:
-        return not self.stops
-
-
 class Simulator:
-    """Bộ mô phỏng DPDP với tái tối ưu theo chu kỳ bằng ALNS."""
+    """Bộ mô phỏng DPDP, tái tối ưu ngay khi mỗi yêu cầu động xuất hiện."""
 
     def __init__(self, inst: Instance, params: Params,
                  config: SimConfig | None = None):
@@ -171,33 +135,24 @@ class Simulator:
         self.params = params
         self.config = config or SimConfig()
         self.queue = EventQueue()
-        self.vehicles: list[_Vehicle] = []
-        self.pending: list[int] = []      # yêu cầu chờ được giao
-        #: Yêu cầu đã được phục vụ và hoàn thành trong mô phỏng.
         self.completed: set[int] = set()
-        #: Quãng đường đã thực thi (công thức 1.4: tính trên toàn bộ phần
-        #: lộ trình đã thực thi của mọi xe).
-        self.executed_distance: float = 0.0
         self.now: float = 0.0
         self.solution: Solution | None = None
+        self.release_original: dict[int, float] = {}
+        self.release: dict[int, float] = self.release_original
         self.reoptimizations = 0
         self.route_changes = 0
         self.improved_reoptimizations = 0
         self.decision_seconds: list[float] = []
-        self.freezing = FreezingManager(safety=self.config.freeze_safety)
         #: Ràng buộc đã dùng ở chu kỳ gần nhất; phục vụ kiểm thử/audit thí nghiệm.
         self.last_freezing_constraint = None
-        #: Số yêu cầu bị từ chối vì không còn xe rảnh.
-        #: Yêu cầu từng không tìm được xe nào khả thi (đã bị từ chối).
-        self.rejected_for_capacity = 0
 
     # ------------------------------------------------------------- khởi tạo
     def _setup(self) -> None:
-        """Sinh sự kiện E_1 cho các yêu cầu động và tạo đội xe."""
+        """Sinh sự kiện xuất hiện yêu cầu và tạo lời giải tĩnh ban đầu."""
         cfg = self.config
         n_veh = (cfg.num_vehicles if cfg.num_vehicles is not None
                  else self.inst.num_vehicles)
-        self.vehicles = [_Vehicle(index=i) for i in range(n_veh)]
 
         release = (dict(cfg.release_times) if cfg.release_times is not None
                    else dynamize(self.inst, cfg.rho, cfg.lead_time,
@@ -206,7 +161,9 @@ class Simulator:
             raise ValueError("release_times phải có đúng một thời điểm cho mỗi yêu cầu")
         if any(t < 0.0 for t in release.values()):
             raise ValueError("release_times không được âm")
-        self.release = release
+        self.release_original = release
+        self.release = self.release_original
+        self.inst.release.clear()
         for p, tau in release.items():
             if tau > 0.0:
                 self.queue.push(tau, EventType.NEW_REQUEST, p)
@@ -228,184 +185,94 @@ class Simulator:
         self.solution.unassigned.update(
             p for p, tau in release.items() if tau > 0.0)
 
-        # Đồng bộ trạng thái vận hành của từng xe với lộ trình tĩnh ban đầu:
-        # xe nào có lộ trình thì bắt đầu chạy, và lên lịch sự kiện E_2 (xe
-        # hoàn thành chặng) tại thời điểm quay về kho.
-        for k, route in enumerate(self.solution.routes):
-            reqs = [nid for nid in route.stops if self.inst.nodes[nid].is_pickup]
-            if not reqs:
-                continue
-            veh = self.vehicles[k]
-            veh.stops = list(reqs)
-            self._schedule_finish(veh)
-
-    def _schedule_finish(self, veh: _Vehicle) -> None:
-        """Lên lịch sự kiện E_2 khi xe hoàn thành lộ trình hiện tại."""
-        if not veh.stops:
-            return
-        inst = self.inst
-        snapshot = list(self.solution.routes[veh.index].stops)
-        if not snapshot:
-            return
-        # Tính theo đúng thứ tự nút của route, bao gồm thời gian chờ ở cửa sổ
-        # thời gian, và bắt đầu tại thời điểm DES hiện tại.
-        t = self.now
-        prev = 0
-        for nid in snapshot:
-            node = inst.nodes[nid]
-            t = max(t + inst.tt[prev][nid], node.e) + node.s
-            prev = nid
-        finish = t + inst.tt[prev][0]
-        veh.route_snapshot = snapshot
-        veh.schedule_token += 1
-        veh.free_at = finish
-        self.queue.push(veh.free_at, EventType.VEHICLE_FREE,
-                        (veh.index, veh.schedule_token))
-
-    def _trip_distance(self, stops: list[int]) -> float:
-        """Quãng đường của một chuyến theo chuỗi nút thực thi đã chốt."""
-        if not stops:
-            return 0.0
-        dist = self.inst.dist
-        total = 0.0
-        prev = 0
-        for nid in stops:
-            total += dist[prev][nid]
-            prev = nid
-        return total + dist[prev][0]
-
     # ---------------------------------------------------------------- DES
-    def _handle_new_request(self, ev) -> None:
-        """E_1: một yêu cầu mới xuất hiện tại thời điểm τ_r."""
-        p = ev.payload
-        veh = self._free_vehicle()
-        if veh is None:
-            # Không có xe rảnh: yêu cầu vào hàng đợi chờ (mục 2.2.2).
-            # Yêu cầu này *chưa* bị từ chối — nó sẽ được giao khi có xe rảnh.
-            self.pending.append(p)
-            self.solution.unassigned.add(p)
-            return
+    def _horizon_H(self) -> float:
+        """Chân trời cam kết theo đơn vị thời gian của instance: H=ςB+H₀."""
+        cfg = self.config
+        if not cfg.use_freezing:
+            return 0.0
+        return cfg.time_scale * cfg.budget + cfg.freeze_horizon
 
-        self._assign(veh, p)
+    def _frozen_prefix(self, route) -> int:
+        nodes, now, horizon = self.inst.nodes, self.now, self._horizon_H()
+        frozen = 0
+        for j, nid in enumerate(route.stops):
+            start = route.dep[j] - nodes[nid].s
+            en_route = j > 0 and route.dep[j - 1] <= now
+            if start <= now + horizon or en_route:
+                frozen = j + 1
+            else:
+                break
+        return frozen
+
+    def _advance_release(self) -> None:
+        """Không cho các điểm lấy còn tự do được lên lịch trước thời điểm hiện tại."""
+        for route in self.solution.routes:
+            frozen = self._frozen_prefix(route)
+            for nid in route.stops[frozen:]:
+                if self.inst.nodes[nid].is_pickup:
+                    self.inst.release[nid] = max(
+                        self.inst.release.get(nid, 0.0), self.now)
+
+    def _constraint(self) -> FreezingConstraint:
+        min_pos, free_map = {}, {}
+        for k, route in enumerate(self.solution.routes):
+            frozen = self._frozen_prefix(route)
+            min_pos[k] = frozen
+            free_map[k] = set(route.stops[frozen:])
+        return FreezingConstraint(
+            min_pos=min_pos,
+            free_map=free_map,
+            safety=self.config.freeze_safety,
+            committed=frozenset(self.solution.served_requests),
+        )
+
+    def _handle_new_request(self, ev) -> None:
+        """E_1: thêm yêu cầu mới tại thời điểm xuất hiện."""
+        p = ev.payload
+        self._advance_release()
+        self.inst.release[p] = self.now
+        d = self.inst.delivery_of(p)
+        best = None
+        for k, route in enumerate(self.solution.routes):
+            candidate = route.best_insertion(
+                p, d, min_pos=self._frozen_prefix(route))
+            if candidate is not None and (
+                    best is None or candidate[0] < best[0]):
+                best = (candidate[0], k, candidate[1], candidate[2])
+
+        if best is None:
+            return
+        _, k, i, j = best
+        self.solution.routes[k].insert(p, d, i, j)
+        self.solution.unassigned.discard(p)
         if self.config.reoptimize_on_arrival:
             self._reoptimize()
 
-    def _handle_vehicle_free(self, ev) -> None:
-        """E_2: một phương tiện hoàn thành chuyến và trở nên rảnh.
+    def _handle_optimization_end(self, _ev) -> None:
+        """E_3: mốc kết thúc chu kỳ tái tối ưu."""
+        if _ev.type is not EventType.OPTIMIZATION_END:
+            raise ValueError("sự kiện không phải OPTIMIZATION_END")
 
-        Các yêu cầu xe vừa phục vụ xong được gỡ khỏi lộ trình (chúng không
-        còn là "phần lộ trình" của xe nữa) và chuyển sang tập *đã hoàn thành*.
-        Quãng đường đã thực thi được tính theo đúng thứ tự đi của xe:
-        kho → lấy₁ → giao₁ → lấy₂ → … → kho (công thức 1.4).
-        """
-        if isinstance(ev.payload, tuple):
-            vehicle_index, token = ev.payload
-        else:  # tương thích các caller dùng payload là trực tiếp chỉ số xe
-            vehicle_index, token = ev.payload, None
-        veh = self.vehicles[vehicle_index]
-        if token is not None and token != veh.schedule_token:
-            return
-        sol = self.solution
-
-        # Quãng đường của chuyến vừa hoàn thành, theo thứ tự thực thi.
-        self.executed_distance += self._trip_distance(veh.route_snapshot)
-
-        # Gỡ các yêu cầu vừa hoàn thành khỏi lộ trình của xe.
-        for p in list(veh.stops):
-            d = self.inst.delivery_of(p)
-            for k, route in enumerate(sol.routes):
-                if p in route.stops and d in route.stops:
-                    route.remove_request(p, d)
-                    break
-            self.completed.add(p)
-        veh.committed += len(veh.stops)
-        veh.stops.clear()
-        veh.route_snapshot.clear()
-        veh.position = 0
-
-        if self.pending:
-            p = self.pending.pop(0)
-            self._assign(veh, p)
-
-    def _handle_optimization_end(self, ev) -> None:
-        """E_3: hết ngân sách tái tối ưu của một chu kỳ."""
-        # Chu kỳ đã kết thúc trong `_reoptimize`; sự kiện này giữ vai trò mốc
-        # thời gian trong hàng đợi, đảm bảo luồng sự kiện rõ ràng.
-        pass
-
-    def _handle_simulation_end(self, ev) -> None:
+    def _handle_simulation_end(self, _ev) -> None:
         """E_4: kết thúc mô phỏng."""
-        pass
-
-    # -------------------------------------------------------------- trợ giúp
-    def _free_vehicle(self) -> _Vehicle | None:
-        """Xe rảnh đầu tiên, hoặc None nếu tất cả đang chạy."""
-        for veh in self.vehicles:
-            if veh.free:
-                return veh
-        return None
-
-    def _assign(self, veh: _Vehicle, p: int) -> bool:
-        """Giao yêu cầu `p` cho phương tiện `veh`; trả về True nếu thành công.
-
-        Sau khi nhận yêu cầu, xe lên lịch sự kiện E_2 (hoàn thành chặng) tại
-        thời điểm xe sẽ quay về kho.
-        """
-        d = self.inst.delivery_of(p)
-        sol = self.solution
-        sol.unassigned.discard(p)
-
-        # Chèn vào xe `veh`; nếu không khả thi thì thử xe khác.
-        for k, route in enumerate(sol.routes):
-            if k != veh.index and not self.vehicles[k].free:
-                continue
-            v = route.best_insertion(p, d)
-            if v is not None:
-                route.insert(p, d, v[1], v[2])
-                # `stops` lưu id *yêu cầu* (nút lấy), không phải nút giao.
-                assigned_vehicle = self.vehicles[k]
-                assigned_vehicle.stops.append(p)
-                self.freezing.assign(assigned_vehicle.index, p)
-                # E_2: xe hoàn thành chặng và trở nên rảnh.
-                self._schedule_finish(assigned_vehicle)
-                return True
-
-        # Không xe nào khả thi: giữ yêu cầu ở hàng đợi chờ. Nếu đến cuối
-        # mô phỏng vẫn chưa được giao thì nó bị từ chối.
-        self.pending.insert(0, p)
-        sol.unassigned.add(p)
-        return False
+        if _ev.type is not EventType.SIMULATION_END:
+            raise ValueError("sự kiện không phải SIMULATION_END")
 
     def _reoptimize(self) -> None:
-        """Chạy một chu kỳ tái tối ưu ALNS trên lời giải hiện tại.
-
-        Nếu bật cơ chế đóng băng (mục 2.2.3), ALNS chỉ được thay đổi phần lộ
-        trình *chưa cam kết* của mỗi xe.
-        """
+        """Tối ưu ngay tại sự kiện đến; CPU time chưa làm tiến đồng hồ mô phỏng."""
         if self.solution is None:
             return
-        cfg = self.config
-
-        constraint = None
-        if cfg.use_freezing:
-            # Chân trời đóng băng: một xe đã rời kho luôn giữ tối thiểu yêu
-            # cầu kế tiếp (điểm lấy + giao) ngoài phần đã hoàn thành. Dùng
-            # manager cục bộ cho từng chu kỳ để chỉ số của chuyến cũ không
-            # ràng buộc nhầm một chuyến mới của cùng xe.
-            manager = FreezingManager(safety=cfg.freeze_safety)
-            for veh in self.vehicles:
-                if veh.stops:
-                    route_len = len(self.solution.routes[veh.index].stops)
-                    committed = min(route_len, max(veh.committed, 2))
-                    manager.commit(veh.index, committed)
-            constraint = manager.constraint(self.solution)
+        self._advance_release()
+        constraint = self._constraint()
         self.last_freezing_constraint = constraint
-
         before_signature = tuple(tuple(route.stops)
                                  for route in self.solution.routes)
         before_cost = self.solution.cost
-        engine = ALNSEngine(self.inst, self.params, cfg.alns_config(),
-                            constraint=constraint, seed=cfg.seed)
+        cfg = self.config
+        engine = ALNSEngine(
+            self.inst, self.params, cfg.alns_config(),
+            constraint=constraint, seed=cfg.seed)
         best, stats = engine.run(self.solution)
         self.decision_seconds.append(stats.seconds)
         self.solution = best
@@ -417,32 +284,13 @@ class Simulator:
         if self.solution.cost < before_cost - 1e-9:
             self.improved_reoptimizations += 1
 
-        # Đồng bộ trạng thái "yêu cầu đang chạy" của từng xe với lời giải mới:
-        # ALNS có thể đã di dời yêu cầu giữa các xe, nên phải xác định lại
-        # yêu cầu nào còn nằm trong phần lộ trình *chưa cam kết* của xe.
-        for veh in self.vehicles:
-            if not veh.stops:
-                continue
-            still_assigned = []
-            for p in veh.stops:
-                d = self.inst.delivery_of(p)
-                if any(p in r.stops and d in r.stops for r in self.solution.routes):
-                    still_assigned.append(p)
-                else:
-                    # ALNS đã loại yêu cầu này khỏi lời giải: xe không còn
-                    # mang nó, nên không được tính quãng đường khi hoàn thành.
-                    self.solution.unassigned.add(p)
-            veh.stops = still_assigned
-
     # ----------------------------------------------------------------- chạy
     def run(self) -> SimResult:
-        """Chạy mô phỏng đến khi hết thời gian; trả về kết quả."""
+        """Chạy mô phỏng đến khi hết thời gian."""
         t0 = _time.perf_counter()
         self._setup()
-
         handlers = {
             EventType.NEW_REQUEST: self._handle_new_request,
-            EventType.VEHICLE_FREE: self._handle_vehicle_free,
             EventType.OPTIMIZATION_END: self._handle_optimization_end,
             EventType.SIMULATION_END: self._handle_simulation_end,
         }
@@ -459,19 +307,11 @@ class Simulator:
                 break
 
         sol = self.solution
-        # Yêu cầu đã hoàn thành không còn nằm trong lộ trình, nên `served`
-        # của lời giải không phản ánh đúng tổng số yêu cầu đã phục vụ.
-        served = len(self.completed) + sol.n_served
-        # Yêu cầu còn nằm trong hàng đợi chờ khi mô phỏng kết thúc cũng bị
-        # tính là từ chối (không kịp phục vụ).
-        rejected = len(sol.unassigned)
-        # Quãng đường (1.4): phần đã thực thi + phần lộ trình còn lại.
-        total_distance = self.executed_distance + sol.distance
         return SimResult(
             best_cost=sol.cost,
-            served=served,
-            rejected=rejected,
-            total_distance=total_distance,
+            served=sol.n_served,
+            rejected=len(sol.unassigned),
+            total_distance=sol.distance,
             total_lateness=sol.lateness,
             vehicles_used=sol.vehicles_used,
             reoptimizations=self.reoptimizations,

@@ -27,6 +27,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--grid", type=Path,
                         default=ROOT / "experiments/H1_distance_freezing/configs/calibration_grid.json")
     parser.add_argument("--release-root", type=Path, default=ROOT / "data/dynamic")
+    parser.add_argument("--manifest", type=Path,
+                        default=ROOT / "data/dynamic/manifest.json")
     parser.add_argument("--output", type=Path,
                         default=ROOT / "experiments/H1_distance_freezing/results/raw/calibration.csv")
     parser.add_argument("--selected", type=Path,
@@ -34,22 +36,35 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     grid = json.loads(args.grid.read_text(encoding="utf-8"))
     protocol, candidates = grid["protocol"], grid["candidates"]
+    try:
+        manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        parser.error(f"không đọc được manifest: {exc}")
     rows = []
     for candidate in candidates:
         for instance_name in protocol["instances"]:
             path = lilim_dir() / instance_name
             if not path.exists():
                 parser.error(f"thiếu instance calibration: {path}")
+            entry = manifest.get("instances", {}).get(path.stem)
+            if entry is None:
+                parser.error(f"thiếu {path.stem} trong manifest {args.manifest}")
+            fleet_level = protocol.get("fleet_level")
+            vehicles = (entry["fleet"][fleet_level] if fleet_level
+                        else protocol.get("vehicles"))
             for seed in protocol["seeds"]:
                 release_file = release_path(args.release_root, path.stem,
                                             protocol["rho"], seed)
                 if not release_file.exists():
                     parser.error(f"thiếu release scenario: {release_file}")
                 row = run_one(path, seed, protocol["rho"], candidate["budget"],
-                              None, protocol["max_iterations"], protocol["vehicles"],
+                              None, protocol["max_iterations"], vehicles,
                               "alns_freezing", read_release(release_file),
-                              candidate.get("alns_overrides", {}))
+                              candidate.get("alns_overrides", {}),
+                              candidate["freeze_horizon"],
+                              protocol.get("time_scale", 1.0))
                 row["candidate"] = candidate["id"]
+                row["fleet_level"] = fleet_level or ""
                 row["alns_overrides"] = json.dumps(candidate.get("alns_overrides", {}),
                                                      sort_keys=True)
                 rows.append(row)
@@ -67,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
 
     grouped = defaultdict(list)
     for row in rows:
-        if row["valid"] == "True":
+        if row["valid"] is True or row["valid"] == "True":
             grouped[row["candidate"]].append(row)
     if not grouped:
         parser.error("không có cấu hình hợp lệ")
@@ -84,6 +99,8 @@ def main(argv: list[str] | None = None) -> int:
         "selection_rule": "max served_rate, then min total_distance, then min mean decision time",
         "calibration_protocol": protocol,
         "budget": candidate_by_id[winner_id]["budget"],
+        "freeze_horizon": candidate_by_id[winner_id]["freeze_horizon"],
+        "time_scale": protocol.get("time_scale", 1.0),
         "alns_overrides": candidate_by_id[winner_id].get("alns_overrides", {}),
     }
     args.selected.parent.mkdir(parents=True, exist_ok=True)

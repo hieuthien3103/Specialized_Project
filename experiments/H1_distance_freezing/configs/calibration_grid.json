@@ -1,14 +1,22 @@
 {
   "protocol": {
-    "instances": ["lc101.txt", "lr101.txt", "lrc101.txt"],
+    "instances": ["lc102.txt", "lr102.txt", "lrc102.txt"],
     "seeds": [0, 1, 2],
     "rho": 0.5,
-    "vehicles": 10,
-    "max_iterations": 100
+    "fleet_level": "tight",
+    "max_iterations": 100,
+    "time_scale": 1.0,
+    "evaluation_instances_excluded": ["lc101.txt", "lr101.txt", "lrc101.txt"]
   },
   "candidates": [
-    {"id": "C1", "budget": 0.02, "alns_overrides": {"destroy_fraction": 0.2, "reaction": 0.1, "segment_min": 10}},
-    {"id": "C2", "budget": 0.05, "alns_overrides": {"destroy_fraction": 0.3, "reaction": 0.1, "segment_min": 10}},
-    {"id": "C3", "budget": 0.05, "alns_overrides": {"destroy_fraction": 0.4, "reaction": 0.2, "segment_min": 10}}
+    {"id": "C1_H0_0", "budget": 0.02, "freeze_horizon": 0, "alns_overrides": {"destroy_fraction": 0.2, "reaction": 0.1, "segment_min": 10}},
+    {"id": "C1_H0_10", "budget": 0.02, "freeze_horizon": 10, "alns_overrides": {"destroy_fraction": 0.2, "reaction": 0.1, "segment_min": 10}},
+    {"id": "C1_H0_30", "budget": 0.02, "freeze_horizon": 30, "alns_overrides": {"destroy_fraction": 0.2, "reaction": 0.1, "segment_min": 10}},
+    {"id": "C2_H0_0", "budget": 0.05, "freeze_horizon": 0, "alns_overrides": {"destroy_fraction": 0.3, "reaction": 0.1, "segment_min": 10}},
+    {"id": "C2_H0_10", "budget": 0.05, "freeze_horizon": 10, "alns_overrides": {"destroy_fraction": 0.3, "reaction": 0.1, "segment_min": 10}},
+    {"id": "C2_H0_30", "budget": 0.05, "freeze_horizon": 30, "alns_overrides": {"destroy_fraction": 0.3, "reaction": 0.1, "segment_min": 10}},
+    {"id": "C3_H0_0", "budget": 0.05, "freeze_horizon": 0, "alns_overrides": {"destroy_fraction": 0.4, "reaction": 0.2, "segment_min": 10}},
+    {"id": "C3_H0_10", "budget": 0.05, "freeze_horizon": 10, "alns_overrides": {"destroy_fraction": 0.4, "reaction": 0.2, "segment_min": 10}},
+    {"id": "C3_H0_30", "budget": 0.05, "freeze_horizon": 30, "alns_overrides": {"destroy_fraction": 0.4, "reaction": 0.2, "segment_min": 10}}
   ]
 }

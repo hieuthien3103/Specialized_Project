@@ -56,6 +56,8 @@ experiments/
 | `H4_dynamism` | Mở rộng — hiệu quả tương đối theo tỷ lệ yêu cầu xuất hiện động | Hiệu quả tương đối tại các mức độ động |
 
 Mỗi cấu hình nên ghi rõ seed, instance, số lần lặp, ngân sách thời gian,
-baseline và biến thể thuật toán. Kết quả từng lần chạy lưu ở `results/raw/`,
+H₀ (cùng đơn vị thời gian với instance), baseline và biến thể thuật toán.
+DES hiện tái tối ưu ngay tại mỗi sự kiện yêu cầu mới; không áp dụng chu kỳ Δ
+và chưa cho đồng hồ mô phỏng tiến trong thời gian CPU. Kết quả từng lần chạy lưu ở `results/raw/`,
 bảng/tóm tắt lưu ở `results/summarized/`, còn bảng và biểu đồ phân tích lưu
 ở `analysis/`.

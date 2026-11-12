@@ -40,6 +40,7 @@ class Route:
         self._tt = inst.tt
         self._dist = inst.dist
         self._cap = inst.capacity
+        self._release = inst.release
         self.stops: list[int] = list(stops)
         self._refresh()
 
@@ -53,6 +54,10 @@ class Route:
         arr = tdep + self._tt[prev][nid]
         if arr < nd.e:
             arr = nd.e
+        if self._release:
+            release = self._release.get(nid)
+            if release is not None and arr < release:
+                arr = release
         load += nd.demand
         if load > self._cap + EPS:
             return None

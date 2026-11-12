@@ -26,7 +26,8 @@ from dpdp.core.route import Params
 def run_one(path: Path, seed: int, rho: float, budget: float,
             horizon: float | None, max_iterations: int, vehicles: int | None,
             algorithm: str, release_times: dict[int, float] | None = None,
-            alns_overrides: dict[str, object] | None = None) -> dict:
+            alns_overrides: dict[str, object] | None = None,
+            freeze_horizon: float = 0.0, time_scale: float = 1.0) -> dict:
     inst = parse_lilim(path)
     if algorithm not in {"greedy", "regret2", "alns_full", "alns_freezing"}:
         raise ValueError(f"algorithm không hỗ trợ: {algorithm}")
@@ -40,6 +41,8 @@ def run_one(path: Path, seed: int, rho: float, budget: float,
         seed=seed,
         num_vehicles=vehicles,
         use_freezing=algorithm == "alns_freezing",
+        freeze_horizon=freeze_horizon,
+        time_scale=time_scale,
         reoptimize_on_arrival=is_alns,
         construction="regret2" if algorithm == "regret2" else "greedy",
         release_times=release_times,
@@ -48,7 +51,8 @@ def run_one(path: Path, seed: int, rho: float, budget: float,
     simulator = Simulator(inst, Params(), config)
     result = simulator.run()
     report = validate(inst, result.solution.as_lists(), Params(),
-                      result.solution.unassigned, simulator.completed)
+                      result.solution.unassigned, simulator.completed,
+                      release=simulator.release_original)
     return {
         "instance": inst.name,
         "input": str(path),
@@ -56,6 +60,8 @@ def run_one(path: Path, seed: int, rho: float, budget: float,
         "seed": seed,
         "rho": rho,
         "budget": budget,
+        "freeze_horizon": freeze_horizon,
+        "time_scale": time_scale,
         "horizon": resolved_horizon,
         "vehicles": vehicles or inst.num_vehicles,
         "served": result.served,
@@ -94,6 +100,14 @@ def main(argv: list[str] | None = None) -> int:
                         help="T_H; mặc định là giờ đóng cửa kho của từng thể hiện")
     parser.add_argument("--max-iterations", type=int, default=1000)
     parser.add_argument("--vehicles", type=int)
+    parser.add_argument("--fleet-level", choices=["tight", "loose"],
+                        help="Lấy K từ data/dynamic/manifest.json theo thể hiện")
+    parser.add_argument("--manifest", type=Path,
+                        default=ROOT / "data/dynamic/manifest.json")
+    parser.add_argument("--freeze-horizon", type=float, default=0.0,
+                        help="H0 theo đơn vị thời gian của instance (mặc định 0)")
+    parser.add_argument("--time-scale", type=float, default=1.0,
+                        help="ς: đơn vị thời gian mô phỏng trên mỗi giây CPU")
     parser.add_argument("--algorithms", nargs="+",
                         default=["greedy", "regret2", "alns_full", "alns_freezing"],
                         choices=["greedy", "regret2", "alns_full", "alns_freezing"])
@@ -101,11 +115,23 @@ def main(argv: list[str] | None = None) -> int:
                         help="Thư mục data/dynamic đã sinh sẵn; thiếu thì dùng dynamize() tái lập")
     parser.add_argument("--alns-config", type=Path,
                         help="JSON các trường ALNSConfig cần ghi đè (dùng cho hiệu chỉnh)")
+    parser.add_argument("--selected-config", type=Path,
+                        help="Cấu hình được chọn bởi tune_parameters.py")
     parser.add_argument("--output", type=Path,
                         default=raw_results_dir("H1_distance_freezing")
                         / "h1_paired_results.csv")
     args = parser.parse_args(argv)
     alns_overrides = {}
+    if args.selected_config is not None:
+        try:
+            selected = json.loads(
+                args.selected_config.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            parser.error(f"không đọc được --selected-config: {exc}")
+        args.budget = selected["budget"]
+        args.freeze_horizon = selected["freeze_horizon"]
+        args.time_scale = selected["time_scale"]
+        alns_overrides = selected.get("alns_overrides", {})
     if args.alns_config is not None:
         try:
             alns_overrides = json.loads(args.alns_config.read_text(encoding="utf-8"))
@@ -126,8 +152,31 @@ def main(argv: list[str] | None = None) -> int:
     rhos = args.rhos if args.rhos is not None else [args.rho]
     if any(not 0.0 <= rho <= 1.0 for rho in rhos):
         parser.error("mọi rho phải thuộc [0, 1]")
+    if args.freeze_horizon < 0:
+        parser.error("--freeze-horizon phải không âm")
+    if args.time_scale < 0:
+        parser.error("--time-scale phải không âm")
+
+    manifest = None
+    if args.fleet_level:
+        try:
+            manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            parser.error(f"không đọc được manifest: {exc}")
+
     rows = []
     for path in paths:
+        vehicles = args.vehicles
+        if args.fleet_level:
+            entry = manifest.get("instances", {}).get(path.stem)
+            if entry is None or args.fleet_level not in entry.get("fleet", {}):
+                parser.error(
+                    f"không có fleet={args.fleet_level} cho {path.stem} "
+                    f"trong {args.manifest}")
+            manifest_vehicles = entry["fleet"][args.fleet_level]
+            if vehicles is not None and vehicles != manifest_vehicles:
+                parser.error("--vehicles mâu thuẫn với --fleet-level")
+            vehicles = manifest_vehicles
         for rho in rhos:
             for seed in args.seeds:
                 release_times = None
@@ -142,8 +191,9 @@ def main(argv: list[str] | None = None) -> int:
                           flush=True)
                     row = run_one(
                         path, seed, rho, args.budget, args.horizon,
-                        args.max_iterations, args.vehicles, algorithm,
-                        release_times, alns_overrides)
+                        args.max_iterations, vehicles, algorithm,
+                        release_times, alns_overrides,
+                        args.freeze_horizon, args.time_scale)
                     rows.append(row)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

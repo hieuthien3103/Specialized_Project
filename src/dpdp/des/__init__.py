@@ -2,8 +2,8 @@
 
 Ánh xạ báo cáo:
 
-    2.2.2 kiến trúc tái tối ưu theo chu kỳ (Thuật toán 2.2) -> simulator.py
-    Sự kiện E_1..E_4 và hàng đợi ưu tiên theo thời gian      -> events.py
+    2.2.2 tái tối ưu theo sự kiện yêu cầu đến                  -> simulator.py
+    Các loại sự kiện và hàng đợi ưu tiên theo thời gian       -> events.py
 
 Phần ghép DES với khung ALNS của thư viện `alns` (Wouda & Lan [20]) nằm ở
 `simulator.py` — đây là một trong hai đóng góp của đề tài (đóng góp còn lại

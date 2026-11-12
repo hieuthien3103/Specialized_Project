@@ -42,11 +42,13 @@ class FreezingConstraint:
     min_pos: dict[int, int] = field(default_factory=dict)
     free_map: dict[int, set[int]] = field(default_factory=dict)
     safety: float = 0.0
+    committed: frozenset[int] = frozenset()
 
     def context(self, sol: Solution) -> FreeContext:
         """Sinh `FreeContext` mà các toán tử của ALNS dùng."""
         return FreeContext(min_pos=dict(self.min_pos),
-                           free_map={k: set(v) for k, v in self.free_map.items()})
+                           free_map={k: set(v) for k, v in self.free_map.items()},
+                           committed=self.committed)
 
     def is_constrained(self) -> bool:
         return bool(self.min_pos)
@@ -66,11 +68,10 @@ class VehicleCommitment:
 
 
 class FreezingManager:
-    """Theo dõi phần lộ trình đã cam kết và sinh ràng buộc cho ALNS.
+    """Tiện ích theo dõi cam kết theo số nút, giữ cho caller tương thích.
 
-    Mỗi lần một phương tiện hoàn thành một chặng (hoặc được giao yêu cầu mới
-    và đã rời kho), phần lộ trình đã cam kết của xe được đánh dấu bằng cách
-    tăng `horizon`. Các toán tử ALNS sau đó chỉ được thay đổi phần còn lại.
+    Simulator tính chân trời theo thời gian trực tiếp bằng `FreezingConstraint`;
+    manager này còn dùng được cho caller cần quản lý cam kết theo số nút.
     """
 
     def __init__(self, safety: float = 0.0):

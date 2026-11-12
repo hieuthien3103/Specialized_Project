@@ -31,8 +31,9 @@ def main(argv=None):
     args = parser.parse_args(argv)
     with args.input.open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
-    required = {"instance", "seed", "rho", "budget", "horizon", "vehicles",
-                "algorithm", *METRICS, "valid"}
+    required = {"instance", "seed", "rho", "budget", "freeze_horizon",
+                "time_scale", "horizon", "vehicles", "algorithm", *METRICS,
+                "valid"}
     if not rows or required - set(rows[0]):
         parser.error(f"file thiếu dữ liệu yêu cầu: {sorted(required - set(rows[0]) if rows else required)}")
     if any(r["valid"] != "True" for r in rows):
@@ -40,7 +41,9 @@ def main(argv=None):
 
     grouped = defaultdict(dict)
     for row in rows:
-        key = tuple(row[c] for c in ("instance", "seed", "rho", "budget", "horizon", "vehicles"))
+        key = tuple(row[c] for c in (
+            "instance", "seed", "rho", "budget", "freeze_horizon",
+            "time_scale", "horizon", "vehicles"))
         grouped[key][row["algorithm"]] = row
 
     out = []

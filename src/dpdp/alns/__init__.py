@@ -9,7 +9,7 @@ thư viện `alns` (mã nguồn mở, JOSS 2023). Phần của đề tài gồm:
     2.1.6 tiêu chuẩn chấp nhận        -> thư viện `alns` (SimulatedAnnealing)
     2.2.5 ngân sách thời gian (2.24)–(2.26) -> thư viện `alns` (MaxRuntime)
     Bảng 2.4 cấu hình tham số        -> config.py   ← *đóng góp của đề tài*
-    ghép chu kỳ tái tối ưu với DES    -> engine.py   ← *đóng góp của đề tài*
+    ghép tái tối ưu theo sự kiện với DES -> engine.py ← *đóng góp của đề tài*
 
 `weights.py` và `acceptance.py` là các implementation độc lập để đối chiếu.
 Engine thực nghiệm vẫn dùng các thành phần tương ứng từ thư viện `alns`.

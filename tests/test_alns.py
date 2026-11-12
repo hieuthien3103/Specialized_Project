@@ -196,6 +196,24 @@ def test_adapter_wraps_solution_as_alns_state():
     assert abs(state.objective() - sol.cost) < 1e-9
 
 
+def test_committed_requests_are_penalized_if_dropped():
+    inst, sol = _setup(n=20, seed=10, vehicles=3)
+    committed = frozenset(sol.served_requests)
+    request = next(iter(committed))
+    from dpdp.alns.operators import remove_requests
+    broken = sol.copy()
+    remove_requests(broken, [request])
+    assert DPDPState(solution=broken, committed=committed).objective() >= (
+        broken.cost + 1e9)
+
+    import numpy as np
+    ctx = FreeContext(committed=committed)
+    state = DPDPState(solution=sol)
+    destroyed = make_destroy_operator("random", ALNSConfig(), ctx)(
+        state, np.random.default_rng(1))
+    assert destroyed.committed == committed
+
+
 def test_adapter_destroy_then_repair_is_valid():
     """Chuỗi phá huỷ → sửa chữa qua adapter phải cho lời giải hợp lệ."""
     import numpy as np

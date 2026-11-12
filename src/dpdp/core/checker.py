@@ -30,7 +30,8 @@ class Report:
 
 
 def validate(inst: Instance, routes: list[list[int]], params: Params,
-             unassigned=(), completed=()) -> Report:
+             unassigned=(), completed=(),
+             release: dict[int, float] | None = None) -> Report:
     """Kiểm tra tính hợp lệ của một lời giải.
 
     Args:
@@ -39,6 +40,7 @@ def validate(inst: Instance, routes: list[list[int]], params: Params,
             nhưng không còn nằm trong lộ trình (đã chạy xong). Trong mô phỏng
             DES, các yêu cầu này không còn xuất hiện trong `routes` nhưng vẫn
             đã được phục vụ, nên không được coi là thiếu.
+        release: thời điểm sớm nhất được phục vụ tại từng nút lấy hàng.
     """
     errors: list[str] = []
     nodes = inst.nodes
@@ -77,7 +79,9 @@ def validate(inst: Instance, routes: list[list[int]], params: Params,
         prev, t, load = 0, nodes[0].e, 0.0
         for nid in stops:
             nd = nodes[nid]
-            arr = max(t + inst.dist[prev][nid] / inst.speed, nd.e)
+            arr = max(t + inst.tt[prev][nid], nd.e)
+            if release and nid in release:
+                arr = max(arr, release[nid])
             load += nd.demand
             if load > inst.capacity + TOL:
                 errors.append(f"xe {ri}: quá tải tại nút {nid} ({load:g} > {inst.capacity:g})")

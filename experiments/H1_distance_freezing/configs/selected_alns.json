@@ -1,0 +1,33 @@
+{
+  "selected_candidate": "C2_H0_0",
+  "selection_rule": "max served_rate, then min total_distance, then min mean decision time",
+  "calibration_protocol": {
+    "instances": [
+      "lc102.txt",
+      "lr102.txt",
+      "lrc102.txt"
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "rho": 0.5,
+    "fleet_level": "tight",
+    "max_iterations": 100,
+    "time_scale": 1.0,
+    "evaluation_instances_excluded": [
+      "lc101.txt",
+      "lr101.txt",
+      "lrc101.txt"
+    ]
+  },
+  "budget": 0.05,
+  "freeze_horizon": 0,
+  "time_scale": 1.0,
+  "alns_overrides": {
+    "destroy_fraction": 0.3,
+    "reaction": 0.1,
+    "segment_min": 10
+  }
+}

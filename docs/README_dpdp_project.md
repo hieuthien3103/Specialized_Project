@@ -19,6 +19,15 @@ Các gói `alns/`, `adaptations/` và `des/` đã có implementation cho ALNS-D,
 đóng băng và mô phỏng sự kiện rời rạc. Pipeline H1 nằm trong
 `experiments/H1_distance_freezing/`.
 
+### Mô hình DES hiện được cài đặt
+
+Simulator xử lý sự kiện yêu cầu mới xuất hiện và tái tối ưu ngay tại sự kiện
+đó; mã hiện tại không mô phỏng xe di chuyển, sự kiện xe đến điểm hoặc chu kỳ
+định kỳ Δ. Tham số `time_scale` chỉ tham gia chân trời đóng băng
+`H = time_scale × budget + freeze_horizon`, không làm đồng hồ mô phỏng tiến
+trong lúc ALNS chạy. `freeze_horizon` (H₀) có cùng đơn vị thời gian với cửa sổ
+thời gian của instance; các thí nghiệm hiệu chỉnh H₀ trên `{0, 10, 30}`.
+
 `evaluation/` hiện là package khung; các module `metrics.py`, `stats.py` và
 `runner.py` chưa được triển khai. Metadata và đường dẫn dùng chung nằm trong
 `src/dpdp/paths.py`.
@@ -98,23 +107,11 @@ thì khó khẳng định H1.
 
 ## Kết quả kiểm định H1 hiện tại
 
-Đã chạy toàn bộ 56 instance Li & Lim (17 C, 23 R, 16 RC), 3 seed
-(`0,1,2`), `rho=0.5`, ngân sách `0.05` giây, chân trời `1000` và đội xe
-giới hạn `K=5`. Hai thuật toán dùng cùng instance, seed, release time và
-ngân sách; ALNS-D dùng đóng băng.
-
-Kết quả 168 cặp đều hợp lệ. ALNS-D thực sự thay đổi route ở 80/168 lần chạy
-và cải thiện objective ở 80/168 lần. Tuy nhiên:
-
-| Chỉ số | Greedy | ALNS-D + freezing | Wilcoxon (ALNS < greedy) |
-|---|---:|---:|---:|
-| Tổng quãng đường trung bình | 2699,176466 | 2703,249953 | p=0,07119516 |
-
-Chênh lệch trung bình là `+4,073487`, tức ALNS-D cao hơn greedy khoảng
-`0,1509%`. Vì `p > 0,05` và hướng chênh lệch không ủng hộ ALNS-D, **H1 chưa
-được chứng minh/ủng hộ trong cấu hình này**. Đây là kết luận trung thực của
-thực nghiệm, không phải lỗi pipeline. Kết quả nằm trong
-[`../experiments/H1_distance_freezing/`](../experiments/H1_distance_freezing/).
+Các kết quả H1/H4 trước khi đổi DES sang tái tối ưu theo từng sự kiện không
+còn đại diện cho mô hình hiện tại và không được dùng làm kết luận. Cần chạy
+lại với release scenarios cố định, K tight theo manifest, cấu hình H₀ được
+chọn trên tập calibration lc102/lr102/lrc102, và tập đánh giá tách biệt
+lc101/lr101/lrc101.
 
 ## Việc NÊN làm tiếp (theo thứ tự)
 

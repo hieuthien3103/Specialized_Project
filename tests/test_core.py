@@ -109,6 +109,21 @@ def test_checker_detects_violations():
     assert validate(inst, [[p, d]], HARD, set(inst.requests[1:])).ok
 
 
+def test_route_and_checker_enforce_release_time():
+    inst = generate_synthetic(10, seed=0)
+    p = inst.requests[0]
+    d = inst.delivery_of(p)
+    release = inst.nodes[p].e + 1.0
+    inst.release = {p: release}
+
+    route = Route(inst, HARD, [p, d])
+    assert route.dep[0] >= release
+    assert validate(inst, [[p, d]], HARD, set(inst.requests[1:]),
+                    release={p: release}).ok
+    assert not validate(inst, [[p, d]], HARD, set(inst.requests[1:]),
+                        release={p: inst.nodes[p].l + 1.0}).ok
+
+
 def test_route_refuses_infeasible_and_keeps_state():
     inst = generate_synthetic(10, seed=0)
     r = Route(inst, HARD)

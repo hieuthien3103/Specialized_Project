@@ -51,14 +51,19 @@ class DPDPState:
     #: Danh sách yêu cầu bị loại trong vòng lặp hiện tại (do toán tử phá huỷ
     #: ghi vào) — dùng để truyền sang toán tử sửa chữa.
     removed: list[int] = field(default_factory=list)
+    committed: frozenset[int] = frozenset()
 
     def objective(self) -> float:
-        """Giá trị hàm mục tiêu (công thức 2.1)."""
-        return self.solution.cost
+        """Phạt rất lớn nếu lời giải làm rơi yêu cầu đã cam kết."""
+        broken = len(self.committed & self.solution.unassigned)
+        return self.solution.cost + 1e9 * broken
 
 
-def _state_of(sol: Solution) -> DPDPState:
-    return DPDPState(solution=sol)
+def _state_of(sol: Solution, ctx=None) -> DPDPState:
+    return DPDPState(
+        solution=sol,
+        committed=getattr(ctx, "committed", frozenset()),
+    )
 
 
 def _unwrap(state) -> Solution:
@@ -84,10 +89,10 @@ def make_destroy_operator(name: str, config: ALNSConfig, ctx=None):
         if not removed:
             # Không loại được gì: trả về chính lời giải (vô hiệu) để vòng lặp
             # vẫn tiến hóa, tránh kẹt.
-            return _state_of(sol)
+            return _state_of(sol, ctx)
         # phá huỷ thực sự: loại các yêu cầu khỏi lộ trình
         remove_requests(sol, removed)
-        out = _state_of(sol)
+        out = _state_of(sol, ctx)
         out.removed = list(removed)
         return out
 
@@ -108,7 +113,7 @@ def make_repair_operator(name: str, config: ALNSConfig, ctx=None):
         removed = list(getattr(state, "removed", []) or [])
         if removed:
             fn(sol, removed, RNGAdapter(rng), config, ctx)
-        out = _state_of(sol)
+        out = _state_of(sol, ctx)
         out.removed = []
         return out
 

@@ -14,7 +14,7 @@ class ALNSConfig:
     """Tham số của một lần chạy ALNS-D."""
 
     # --- ngân sách thời gian (mục 2.2.5) ---
-    budget: float = 1.0          # B: ngân sách CPU cho mỗi chu kỳ tái tối ưu (giây)
+    budget: float = 1.0          # B: ngân sách CPU cho mỗi lần tái tối ưu (giây)
     max_iterations: int = 10_000  # N_max: trần số vòng lặp
     stall_iterations: int = 300   # N_stall: dừng nếu N_stall vòng lặp không cải thiện
 

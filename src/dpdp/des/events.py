@@ -1,19 +1,15 @@
 """Sự kiện và hàng đợi ưu tiên của khung mô phỏng DES (mục 2.2.2).
 
-Bài toán DPDP được mô phỏng theo kiểu *event-driven*: một bộ sự kiện được
-sinh ra theo thời gian, và mỗi khi có yêu cầu mới xuất hiện thì bộ điều khiển
-quyết định có tái tối ưu hay không.
-
-Bốn sự kiện theo mục 2.2.2:
+Hàng đợi hỗ trợ các sự kiện lý thuyết:
 
     E_1  yêu cầu mới xuất hiện          (τ_r đến)
     E_2  phương tiện hoàn thành chuyến   (quay về kho)
     E_3  hết ngân sách tái tối ưu       (hết B giây kể từ E_1 gần nhất)
     E_4  kết thúc thời gian mô phỏng    (t = T_H)
 
-Hàng đợi ưu tiên theo thời gian: sự kiện sớm hơn được xử lý trước; khi trùng
-thời gian thì sự kiện *quản lý* (E_3, E_4) được ưu tiên hơn sự kiện *vận hành*
-(E_1, E_2), vì quyết định quản lý phải dựa trên trạng thái đã cập nhật.
+Simulator hiện tại phát sinh E_1 và E_4; E_2 vẫn có trong enum để tương thích
+với mô hình vận hành chi tiết nhưng không được phát sinh. Hàng đợi ưu tiên
+theo thời gian; khi trùng thời điểm, sự kiện quản lý (E_3, E_4) được ưu tiên.
 """
 from __future__ import annotations
 
@@ -23,7 +19,7 @@ from enum import IntEnum
 
 
 class EventType(IntEnum):
-    """Bốn loại sự kiện của mục 2.2.2."""
+    """Các loại sự kiện được định nghĩa trong mô hình mục 2.2.2."""
 
     NEW_REQUEST = 1      # E_1
     VEHICLE_FREE = 2     # E_2

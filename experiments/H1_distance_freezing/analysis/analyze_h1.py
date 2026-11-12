@@ -18,7 +18,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from dpdp.paths import analysis_dir, raw_results_dir
 
-PAIR_COLUMNS = ("instance", "seed", "rho", "budget", "horizon", "vehicles")
+PAIR_COLUMNS = ("instance", "seed", "rho", "budget", "freeze_horizon",
+                "time_scale", "horizon", "vehicles")
 METRICS = (
     "total_distance", "served_rate", "rejected", "total_lateness",
     "route_changes", "decision_seconds_mean", "decision_seconds_max",

@@ -194,7 +194,11 @@ class ALNSEngine:
         alns.on_better(_on_better)
         alns.on_accept(_on_accept)
 
-        result = alns.iterate(DPDPState(solution=sol), scheme, accept, stop)
+        initial_state = DPDPState(
+            solution=sol,
+            committed=getattr(ctx, "committed", frozenset()),
+        )
+        result = alns.iterate(initial_state, scheme, accept, stop)
 
         best_sol = result.best_state.solution
         elapsed = time.perf_counter() - t0

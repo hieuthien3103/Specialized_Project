@@ -70,6 +70,8 @@ class Instance:
         # mỗi yêu cầu được định danh bằng id nút lấy hàng
         self.requests: list[int] = [n.id for n in nodes if n.is_pickup]
         self._check()
+        #: mốc sớm nhất được bắt đầu phục vụ nút lấy (DES cập nhật tại chỗ)
+        self.release: dict[int, float] = {}
 
     def delivery_of(self, p: int) -> int:
         return self.nodes[p].delivery
