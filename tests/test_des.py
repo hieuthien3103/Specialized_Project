@@ -43,6 +43,15 @@ def test_event_queue_prefers_management_events_on_tie():
     assert first.type is EventType.SIMULATION_END
 
 
+def test_event_queue_is_stable_when_time_and_priority_tie():
+    """Hai sự kiện cùng loại/cùng thời điểm giữ nguyên thứ tự được thêm."""
+    q = EventQueue()
+    q.push(10.0, EventType.NEW_REQUEST, "first")
+    q.push(10.0, EventType.NEW_REQUEST, "second")
+    assert q.pop().payload == "first"
+    assert q.pop().payload == "second"
+
+
 def test_event_queue_empty_returns_none():
     q = EventQueue()
     assert q.pop() is None
@@ -137,6 +146,19 @@ def test_freezing_safety_margin_opens_horizon():
     constraint = mgr.constraint(sol)
     # xe 0 có nhiều nút nên chân trời vẫn là 2; xe rỗng không bị ràng buộc
     assert constraint.min_pos.get(0) in (0, 2)
+
+
+def test_simulator_activates_freezing_for_dispatched_vehicle():
+    """Biến thể đóng băng phải truyền một tiền tố thực sự sang ALNS."""
+    inst = _instance(15, seed=8)
+    cfg = SimConfig(horizon=800.0, rho=0.0, budget=0.01,
+                    max_iterations=10, seed=1, use_freezing=True)
+    sim = Simulator(inst, HARD, cfg)
+    sim._setup()
+    sim._reoptimize()
+    assert sim.last_freezing_constraint is not None
+    assert sim.last_freezing_constraint.is_constrained()
+    assert all(v >= 2 for v in sim.last_freezing_constraint.min_pos.values())
 
 
 def test_candidate_filter_blocks_far_candidates():

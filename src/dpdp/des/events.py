@@ -44,17 +44,22 @@ class Event:
     payload: object = None
     #: Điểm ưu tiên khi trùng thời gian (số nhỏ hơn được xử lý trước).
     priority: int = field(default=0, compare=False)
+    #: Thứ tự thêm vào hàng đợi, dùng để xử lý ổn định khi cùng thời điểm.
+    sequence: int = field(default=0, compare=False)
 
     def __lt__(self, other: "Event") -> bool:
         if self.time != other.time:
             return self.time < other.time
-        return self.priority < other.priority
+        if self.priority != other.priority:
+            return self.priority < other.priority
+        return self.sequence < other.sequence
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Event):
             return NotImplemented
         return (self.time == other.time and self.type == other.type
-                and self.priority == other.priority)
+                and self.priority == other.priority
+                and self.sequence == other.sequence)
 
 
 class EventQueue:
@@ -66,8 +71,12 @@ class EventQueue:
 
     def push(self, time: float, type: EventType, payload=None) -> None:
         """Đưa một sự kiện vào hàng đợi."""
+        if time < 0:
+            raise ValueError("thời điểm sự kiện không được âm")
         priority = 0 if type in _MANAGEMENT_FIRST else 1
-        ev = Event(time=time, type=type, payload=payload, priority=priority)
+        ev = Event(time=time, type=type, payload=payload, priority=priority,
+                   sequence=self._counter)
+        self._counter += 1
         heapq.heappush(self._heap, ev)
 
     def pop(self) -> Event | None:

@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from ..adaptations.freezing import FreezingManager
 from ..alns.config import ALNSConfig
 from ..alns.engine import ALNSEngine
-from ..baselines import greedy_insertion
+from ..baselines import greedy_insertion, regret_insertion
 from ..core.instance import Instance, dynamize
 from ..core.route import Params
 from ..core.solution import Solution
@@ -47,7 +47,7 @@ from .events import EventQueue, EventType
 class SimConfig:
     """Cấu hình một lần mô phỏng DPDP."""
 
-    horizon: float = 1000.0        # T_H: chiều dài thời gian mô phỏng
+    horizon: float | None = None   # None = giờ đóng cửa kho của thể hiện
     rho: float = 0.3               # ρ: mức độ động (Định nghĩa 1.3)
     lead_time: float = 0.0         # Λ: thời gian dẫn tối thiểu
     budget: float = 2.0            # B: ngân sách tái tối ưu mỗi chu kỳ (giây)
@@ -66,10 +66,19 @@ class SimConfig:
     filter_radius: float = 0.0
     #: Có chạy ALNS sau mỗi yêu cầu mới xuất hiện hay không.
     reoptimize_on_arrival: bool = True
+    #: Heuristic xây dựng lời giải ban đầu: ``greedy`` hoặc ``regret2``.
+    #: Giá trị này tạo hai đối chứng chèn trong cùng một simulator.
+    construction: str = "greedy"
+    #: Giá trị ALNS ghi đè cho thí nghiệm hiệu chỉnh tham số. Chỉ chấp nhận
+    #: trường hợp lệ của ``ALNSConfig`` để tránh cấu hình im lặng bị bỏ qua.
+    alns_overrides: dict[str, object] = field(default_factory=dict)
+    #: Kịch bản release đã sinh sẵn. Dùng để mọi thuật toán chạy đúng cùng
+    #: một kịch bản thay vì tự động hoá lại trong từng lần chạy.
+    release_times: dict[int, float] | None = None
 
     def alns_config(self) -> ALNSConfig:
         """Suy ra cấu hình ALNS tương ứng (Bảng 2.4)."""
-        return ALNSConfig(
+        config = ALNSConfig(
             budget=self.budget,
             max_iterations=self.max_iterations,
             seed=self.seed,
@@ -81,6 +90,12 @@ class SimConfig:
             filter_phi_max=self.filter_phi_max,
             filter_radius=self.filter_radius,
         )
+        unknown = set(self.alns_overrides) - set(ALNSConfig.__dataclass_fields__)
+        if unknown:
+            raise ValueError(f"alns_overrides không hợp lệ: {sorted(unknown)}")
+        for key, value in self.alns_overrides.items():
+            setattr(config, key, value)
+        return config
 
 
 @dataclass
@@ -97,6 +112,7 @@ class SimResult:
     route_changes: int = 0
     improved_reoptimizations: int = 0
     seconds: float = 0.0
+    decision_seconds: list[float] = field(default_factory=list)
     solution: Solution | None = None
 
     def as_row(self) -> dict:
@@ -111,6 +127,12 @@ class SimResult:
             "route_changes": self.route_changes,
             "improved_reoptimizations": self.improved_reoptimizations,
             "seconds": round(self.seconds, 4),
+            "decision_count": len(self.decision_seconds),
+            "decision_seconds_mean": round(
+                sum(self.decision_seconds) / len(self.decision_seconds), 4)
+            if self.decision_seconds else 0.0,
+            "decision_seconds_max": round(max(self.decision_seconds), 4)
+            if self.decision_seconds else 0.0,
         }
 
 
@@ -128,6 +150,12 @@ class _Vehicle:
     committed: int = 0
     free_at: float = 0.0
     position: int = 0            # nút hiện tại (0 = kho)
+    #: Phiên bản lịch hoàn thành chuyến; sự kiện lịch cũ sẽ bị bỏ qua.
+    schedule_token: int = 0
+    #: Chuỗi nút của chuyến đã xuất phát. Đây là snapshot vận hành, tách với
+    #: lời giải dự kiến để quãng đường/thời điểm hoàn thành không bị thay đổi
+    #: ngược bởi một vòng tái tối ưu sau đó.
+    route_snapshot: list[int] = field(default_factory=list)
 
     @property
     def free(self) -> bool:
@@ -150,11 +178,15 @@ class Simulator:
         #: Quãng đường đã thực thi (công thức 1.4: tính trên toàn bộ phần
         #: lộ trình đã thực thi của mọi xe).
         self.executed_distance: float = 0.0
+        self.now: float = 0.0
         self.solution: Solution | None = None
         self.reoptimizations = 0
         self.route_changes = 0
         self.improved_reoptimizations = 0
+        self.decision_seconds: list[float] = []
         self.freezing = FreezingManager(safety=self.config.freeze_safety)
+        #: Ràng buộc đã dùng ở chu kỳ gần nhất; phục vụ kiểm thử/audit thí nghiệm.
+        self.last_freezing_constraint = None
         #: Số yêu cầu bị từ chối vì không còn xe rảnh.
         #: Yêu cầu từng không tìm được xe nào khả thi (đã bị từ chối).
         self.rejected_for_capacity = 0
@@ -167,18 +199,31 @@ class Simulator:
                  else self.inst.num_vehicles)
         self.vehicles = [_Vehicle(index=i) for i in range(n_veh)]
 
-        release = dynamize(self.inst, cfg.rho, cfg.lead_time, seed=cfg.seed)
+        release = (dict(cfg.release_times) if cfg.release_times is not None
+                   else dynamize(self.inst, cfg.rho, cfg.lead_time,
+                                 seed=cfg.seed))
+        if set(release) != set(self.inst.requests):
+            raise ValueError("release_times phải có đúng một thời điểm cho mỗi yêu cầu")
+        if any(t < 0.0 for t in release.values()):
+            raise ValueError("release_times không được âm")
         self.release = release
         for p, tau in release.items():
             if tau > 0.0:
                 self.queue.push(tau, EventType.NEW_REQUEST, p)
-        self.queue.push(cfg.horizon, EventType.SIMULATION_END)
+        self.horizon = (self.inst.nodes[0].l if cfg.horizon is None
+                        else cfg.horizon)
+        self.queue.push(self.horizon, EventType.SIMULATION_END)
 
         # Lời giải khởi đầu chỉ gồm các yêu cầu *tĩnh* (τ_r = 0). Yêu cầu
         # động chưa xuất hiện nên không được phục vụ trước thời điểm τ_r.
         static = [p for p, tau in release.items() if tau <= 0.0]
-        self.solution = greedy_insertion(
-            self.inst, self.params, requests=static, num_vehicles=n_veh)
+        constructors = {"greedy": greedy_insertion, "regret2": regret_insertion}
+        try:
+            construct = constructors[cfg.construction]
+        except KeyError as exc:
+            raise ValueError("construction phải là 'greedy' hoặc 'regret2'") from exc
+        self.solution = construct(self.inst, self.params, requests=static,
+                                  num_vehicles=n_veh)
         # Yêu cầu động chưa xuất hiện được coi là chưa phục vụ.
         self.solution.unassigned.update(
             p for p, tau in release.items() if tau > 0.0)
@@ -199,30 +244,34 @@ class Simulator:
         if not veh.stops:
             return
         inst = self.inst
-        total = 0.0
+        snapshot = list(self.solution.routes[veh.index].stops)
+        if not snapshot:
+            return
+        # Tính theo đúng thứ tự nút của route, bao gồm thời gian chờ ở cửa sổ
+        # thời gian, và bắt đầu tại thời điểm DES hiện tại.
+        t = self.now
         prev = 0
-        for p in veh.stops:
-            d = inst.delivery_of(p)
-            total += inst.tt[prev][p] + inst.nodes[p].s + inst.tt[p][d] \
-                + inst.nodes[d].s
-            prev = d
-        total += inst.tt[prev][0]
-        self.queue.push(total, EventType.VEHICLE_FREE, veh.index)
+        for nid in snapshot:
+            node = inst.nodes[nid]
+            t = max(t + inst.tt[prev][nid], node.e) + node.s
+            prev = nid
+        finish = t + inst.tt[prev][0]
+        veh.route_snapshot = snapshot
+        veh.schedule_token += 1
+        veh.free_at = finish
+        self.queue.push(veh.free_at, EventType.VEHICLE_FREE,
+                        (veh.index, veh.schedule_token))
 
-    def _trip_distance(self, reqs: list[int]) -> float:
-        """Quãng đường của một chuyến theo thứ tự thực thi.
-
-        Chuỗi đi thực tế là: kho → lấy₁ → giao₁ → lấy₂ → giao₂ → … → kho.
-        """
-        if not reqs:
+    def _trip_distance(self, stops: list[int]) -> float:
+        """Quãng đường của một chuyến theo chuỗi nút thực thi đã chốt."""
+        if not stops:
             return 0.0
         dist = self.inst.dist
         total = 0.0
         prev = 0
-        for p in reqs:
-            d = self.inst.delivery_of(p)
-            total += dist[prev][p] + dist[p][d]
-            prev = d
+        for nid in stops:
+            total += dist[prev][nid]
+            prev = nid
         return total + dist[prev][0]
 
     # ---------------------------------------------------------------- DES
@@ -249,11 +298,17 @@ class Simulator:
         Quãng đường đã thực thi được tính theo đúng thứ tự đi của xe:
         kho → lấy₁ → giao₁ → lấy₂ → … → kho (công thức 1.4).
         """
-        veh = self.vehicles[ev.payload]
+        if isinstance(ev.payload, tuple):
+            vehicle_index, token = ev.payload
+        else:  # tương thích các caller dùng payload là trực tiếp chỉ số xe
+            vehicle_index, token = ev.payload, None
+        veh = self.vehicles[vehicle_index]
+        if token is not None and token != veh.schedule_token:
+            return
         sol = self.solution
 
         # Quãng đường của chuyến vừa hoàn thành, theo thứ tự thực thi.
-        self.executed_distance += self._trip_distance(veh.stops)
+        self.executed_distance += self._trip_distance(veh.route_snapshot)
 
         # Gỡ các yêu cầu vừa hoàn thành khỏi lộ trình của xe.
         for p in list(veh.stops):
@@ -265,6 +320,7 @@ class Simulator:
             self.completed.add(p)
         veh.committed += len(veh.stops)
         veh.stops.clear()
+        veh.route_snapshot.clear()
         veh.position = 0
 
         if self.pending:
@@ -307,10 +363,11 @@ class Simulator:
             if v is not None:
                 route.insert(p, d, v[1], v[2])
                 # `stops` lưu id *yêu cầu* (nút lấy), không phải nút giao.
-                veh.stops.append(p)
-                self.freezing.assign(veh.index, p)
+                assigned_vehicle = self.vehicles[k]
+                assigned_vehicle.stops.append(p)
+                self.freezing.assign(assigned_vehicle.index, p)
                 # E_2: xe hoàn thành chặng và trở nên rảnh.
-                self._schedule_finish(veh)
+                self._schedule_finish(assigned_vehicle)
                 return True
 
         # Không xe nào khả thi: giữ yêu cầu ở hàng đợi chờ. Nếu đến cuối
@@ -331,18 +388,26 @@ class Simulator:
 
         constraint = None
         if cfg.use_freezing:
-            # Chân trời đóng băng: các nút đã cam kết của mỗi xe.
+            # Chân trời đóng băng: một xe đã rời kho luôn giữ tối thiểu yêu
+            # cầu kế tiếp (điểm lấy + giao) ngoài phần đã hoàn thành. Dùng
+            # manager cục bộ cho từng chu kỳ để chỉ số của chuyến cũ không
+            # ràng buộc nhầm một chuyến mới của cùng xe.
+            manager = FreezingManager(safety=cfg.freeze_safety)
             for veh in self.vehicles:
                 if veh.stops:
-                    self.freezing.commit(veh.index, veh.committed)
-            constraint = self.freezing.constraint(self.solution)
+                    route_len = len(self.solution.routes[veh.index].stops)
+                    committed = min(route_len, max(veh.committed, 2))
+                    manager.commit(veh.index, committed)
+            constraint = manager.constraint(self.solution)
+        self.last_freezing_constraint = constraint
 
         before_signature = tuple(tuple(route.stops)
                                  for route in self.solution.routes)
         before_cost = self.solution.cost
         engine = ALNSEngine(self.inst, self.params, cfg.alns_config(),
                             constraint=constraint, seed=cfg.seed)
-        best, _ = engine.run(self.solution)
+        best, stats = engine.run(self.solution)
+        self.decision_seconds.append(stats.seconds)
         self.solution = best
         self.reoptimizations += 1
         after_signature = tuple(tuple(route.stops)
@@ -386,6 +451,9 @@ class Simulator:
             ev = self.queue.pop()
             if ev is None:
                 break
+            if ev.time < self.now - 1e-9:
+                raise RuntimeError("DES phát hiện sự kiện đi lùi thời gian")
+            self.now = ev.time
             handlers[ev.type](ev)
             if ev.type is EventType.SIMULATION_END:
                 break
@@ -410,5 +478,6 @@ class Simulator:
             route_changes=self.route_changes,
             improved_reoptimizations=self.improved_reoptimizations,
             seconds=_time.perf_counter() - t0,
+            decision_seconds=list(self.decision_seconds),
             solution=sol,
         )

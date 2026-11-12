@@ -14,11 +14,13 @@ from .core import (InfeasibleRoute, Instance, Node, Params, Report, Route,
                    effective_dynamism, generate_synthetic, insert_request,
                    parse_lilim, validate, write_lilim)
 from .baselines import greedy_insertion, regret_insertion
+from .network_hcm import load_hcm_instance
 
 __all__ = [
     "Instance", "Node", "parse_lilim", "write_lilim", "generate_synthetic",
     "dynamize", "degree_of_dynamism", "effective_dynamism", "Params", "Route",
     "InfeasibleRoute",
     "Solution", "insert_request", "greedy_insertion", "regret_insertion",
+    "load_hcm_instance",
     "validate", "Report",
 ]

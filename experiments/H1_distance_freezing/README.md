@@ -1,7 +1,8 @@
 # H1 — Đóng băng và quãng đường
 
-Kiểm tra ALNS có ràng buộc đóng băng phần lộ trình đã cam kết có làm giảm tổng
-quãng đường so với chiến lược chèn tham lam hay không.
+Kiểm tra ALNS-D với ràng buộc đóng băng phần lộ trình đã cam kết so với ba
+đối chứng trên cùng một kịch bản động: greedy, regret-2 và ALNS tái tối ưu
+toàn phần (`alns_full`).
 
 - `configs/`: cấu hình instance, ngân sách và seed
 - `results/`: kết quả chạy thô
@@ -14,7 +15,9 @@ Từ thư mục gốc repo:
 ```bash
 python3 experiments/H1_distance_freezing/scripts/run_h1.py \
   --instances lc101.txt lr101.txt lrc101.txt \
-  --seeds 0 1 2 3 4 5 6 7 8 9
+  --seeds 0 1 2 3 4 5 6 7 8 9 \
+  --rho 0.5 --vehicles 10 --budget 0.2 \
+  --release-root data/dynamic
 python3 experiments/H1_distance_freezing/analysis/analyze_h1.py
 ```
 
@@ -23,10 +26,14 @@ Mặc định thực nghiệm H1 dùng `--vehicles 5` thay vì K=25 của file L
 để tạo không gian tái tối ưu có ràng buộc; giá trị này phải được báo cáo cùng
 kết quả:
 
-- `greedy`: chèn tham lam ban đầu và gán yêu cầu mới khi xuất hiện;
-- `alns_freezing`: ALNS-D tái tối ưu khi yêu cầu mới xuất hiện, với phần route
-  đã cam kết bị đóng băng. Kết quả còn ghi `route_changes` và
-  `improved_reoptimizations` để xác minh ALNS thực sự tác động trong DES.
+- `greedy`: chèn theo chi phí tăng thêm thấp nhất;
+- `regret2`: chèn theo hối tiếc bậc hai;
+- `alns_full`: tái tối ưu ALNS không bật cơ chế đóng băng;
+- `alns_freezing`: ALNS-D có đóng băng.
+
+Runner ghi thêm `served_rate`, `decision_seconds_mean` và
+`decision_seconds_max`. Các cặp trong kiểm định phải có cùng instance, seed,
+rho, budget, horizon và số xe; kiểm định Wilcoxon được thực hiện hai phía.
 
 Kết quả từng cặp nằm ở `results/raw/h1_paired_results.csv`; bảng tổng hợp nằm
 ở `analysis/tables/h1_summary.csv`. H1 chỉ được đánh giá sau khi chạy trên

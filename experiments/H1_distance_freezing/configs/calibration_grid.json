@@ -1,0 +1,14 @@
+{
+  "protocol": {
+    "instances": ["lc101.txt", "lr101.txt", "lrc101.txt"],
+    "seeds": [0, 1, 2],
+    "rho": 0.5,
+    "vehicles": 10,
+    "max_iterations": 100
+  },
+  "candidates": [
+    {"id": "C1", "budget": 0.02, "alns_overrides": {"destroy_fraction": 0.2, "reaction": 0.1, "segment_min": 10}},
+    {"id": "C2", "budget": 0.05, "alns_overrides": {"destroy_fraction": 0.3, "reaction": 0.1, "segment_min": 10}},
+    {"id": "C3", "budget": 0.05, "alns_overrides": {"destroy_fraction": 0.4, "reaction": 0.2, "segment_min": 10}}
+  ]
+}

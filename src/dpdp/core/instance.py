@@ -43,7 +43,9 @@ class Instance:
     """Một thể hiện PDPTW: một kho, đội xe đồng nhất."""
 
     def __init__(self, name: str, num_vehicles: int, capacity: float,
-                 speed: float, nodes: list[Node]):
+                 speed: float, nodes: list[Node],
+                 distance_matrix: list[list[float]] | None = None,
+                 travel_time_matrix: list[list[float]] | None = None):
         if not nodes or nodes[0].id != 0:
             raise ValueError("nodes[0] phải là kho (id = 0)")
         self.name = name
@@ -51,8 +53,20 @@ class Instance:
         self.capacity = capacity
         self.speed = speed if speed > 0 else 1.0
         self.nodes = nodes
-        self.dist = [[math.hypot(a.x - b.x, a.y - b.y) for b in nodes] for a in nodes]
-        self.tt = [[d / self.speed for d in row] for row in self.dist]
+        n = len(nodes)
+        if (distance_matrix is None) != (travel_time_matrix is None):
+            raise ValueError("phải truyền đồng thời distance_matrix và travel_time_matrix")
+        if distance_matrix is None:
+            self.dist = [[math.hypot(a.x - b.x, a.y - b.y) for b in nodes]
+                         for a in nodes]
+            self.tt = [[d / self.speed for d in row] for row in self.dist]
+        else:
+            if (len(distance_matrix) != n or len(travel_time_matrix) != n
+                    or any(len(row) != n for row in distance_matrix)
+                    or any(len(row) != n for row in travel_time_matrix)):
+                raise ValueError("ma trận khoảng cách/thời gian phải có kích thước n × n")
+            self.dist = [[float(value) for value in row] for row in distance_matrix]
+            self.tt = [[float(value) for value in row] for row in travel_time_matrix]
         # mỗi yêu cầu được định danh bằng id nút lấy hàng
         self.requests: list[int] = [n.id for n in nodes if n.is_pickup]
         self._check()

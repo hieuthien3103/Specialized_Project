@@ -1,9 +1,13 @@
-"""Summarize paired H1 results and run Wilcoxon signed-rank tests."""
+"""Tổng hợp so sánh theo cặp cho bốn thuật toán động.
+
+Mỗi cặp được xác định bằng cùng instance, release scenario (rho, seed), đội xe,
+chân trời và ngân sách. ALNS-D được kiểm định hai phía với từng đối chứng;
+việc dùng hai phía tránh khẳng định hướng cải thiện trước khi có dữ liệu.
+"""
 from __future__ import annotations
 
 import argparse
 import csv
-import math
 import statistics
 import sys
 from collections import defaultdict
@@ -14,37 +18,21 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from dpdp.paths import analysis_dir, raw_results_dir
 
+PAIR_COLUMNS = ("instance", "seed", "rho", "budget", "horizon", "vehicles")
+METRICS = (
+    "total_distance", "served_rate", "rejected", "total_lateness",
+    "route_changes", "decision_seconds_mean", "decision_seconds_max",
+)
+CONTROLS = ("greedy", "regret2", "alns_full")
 
-def _fallback_wilcoxon_less(x: list[float], y: list[float]) -> float:
-    """Paired signed-rank p-value without SciPy for small experiment runs."""
-    diffs = [a - b for a, b in zip(x, y) if abs(a - b) > 1e-12]
-    n = len(diffs)
-    if not n:
+
+def _paired_test(x: list[float], y: list[float]) -> float:
+    """Wilcoxon hai phía, trả 1 khi toàn bộ sai khác bằng 0."""
+    if all(abs(a - b) <= 1e-12 for a, b in zip(x, y)):
         return 1.0
-    order = sorted(range(n), key=lambda i: abs(diffs[i]))
-    ranks = [0.0] * n
-    pos = 0
-    while pos < n:
-        end = pos + 1
-        while end < n and abs(abs(diffs[order[end]]) - abs(diffs[order[pos]])) < 1e-12:
-            end += 1
-        rank = (pos + 1 + end) / 2.0
-        for i in order[pos:end]:
-            ranks[i] = rank
-        pos = end
-    observed = sum(rank for rank, diff in zip(ranks, diffs) if diff < 0)
-    if n <= 20:
-        extreme = 0
-        total = 1 << n
-        for mask in range(total):
-            statistic = sum(ranks[i] for i in range(n) if mask & (1 << i))
-            if statistic <= observed + 1e-12:
-                extreme += 1
-        return extreme / total
-    mean = n * (n + 1) / 4.0
-    variance = n * (n + 1) * (2 * n + 1) / 24.0
-    z = (observed - mean + 0.5) / math.sqrt(variance)
-    return 0.5 * math.erfc(-z / math.sqrt(2.0))
+    from scipy.stats import wilcoxon
+    return float(wilcoxon(x, y, alternative="two-sided", zero_method="wilcox",
+                          method="auto").pvalue)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -59,56 +47,58 @@ def main(argv: list[str] | None = None) -> int:
 
     with args.input.open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
-    grouped = defaultdict(dict)
+    if not rows:
+        parser.error("file kết quả rỗng")
+    missing = (set(PAIR_COLUMNS) | {"algorithm", *METRICS}) - set(rows[0])
+    if missing:
+        parser.error(f"thiếu cột: {sorted(missing)}")
+    invalid = [r for r in rows if r.get("valid") != "True"]
+    if invalid:
+        parser.error(f"có {len(invalid)} lần chạy không hợp lệ; không kiểm định")
+
+    grouped: dict[tuple[str, ...], dict[str, dict[str, str]]] = defaultdict(dict)
     for row in rows:
-        grouped[(row["instance"], row["seed"])][row["algorithm"]] = row
+        key = tuple(row[c] for c in PAIR_COLUMNS)
+        if row["algorithm"] in grouped[key]:
+            parser.error(f"trùng kết quả cho cặp {key}, {row['algorithm']}")
+        grouped[key][row["algorithm"]] = row
 
-    pairs = [pair for pair in grouped.values()
-             if "greedy" in pair and "alns_freezing" in pair]
-    if not pairs:
-        parser.error("no complete greedy/alns_freezing pairs found")
-
-    metrics = ("total_distance", "total_lateness", "rejected", "seconds")
     summary = []
-    for metric in metrics:
-        greedy = [float(pair["greedy"][metric]) for pair in pairs]
-        alns = [float(pair["alns_freezing"][metric]) for pair in pairs]
-        differences = [a - g for a, g in zip(alns, greedy)]
-        mean_g = sum(greedy) / len(greedy)
-        mean_a = sum(alns) / len(alns)
-        std_g = statistics.stdev(greedy) if len(greedy) > 1 else 0.0
-        std_a = statistics.stdev(alns) if len(alns) > 1 else 0.0
-        improvement = ((mean_g - mean_a) / mean_g * 100.0
-                       if mean_g else 0.0)
-        try:
-            from scipy.stats import wilcoxon
-            test = wilcoxon(alns, greedy, alternative="less",
-                            zero_method="wilcox", method="auto")
-            p_value = float(test.pvalue)
-        except ImportError:
-            p_value = _fallback_wilcoxon_less(alns, greedy)
-        summary.append({
-            "metric": metric,
-            "pairs": len(pairs),
-            "greedy_mean": f"{mean_g:.6f}",
-            "greedy_std": f"{std_g:.6f}",
-            "alns_freezing_mean": f"{mean_a:.6f}",
-            "alns_freezing_std": f"{std_a:.6f}",
-            "alns_minus_greedy_mean": f"{sum(differences) / len(differences):.6f}",
-            "alns_improvement_percent": f"{improvement:.4f}",
-            "wilcoxon_p_less": f"{p_value:.8g}",
-            "significant_at_0.05": (
-                "yes" if p_value < 0.05 else "no"),
-        })
+    for control in CONTROLS:
+        pairs = [pair for pair in grouped.values()
+                 if control in pair and "alns_freezing" in pair]
+        if not pairs:
+            continue
+        for metric in METRICS:
+            control_values = [float(p[control][metric]) for p in pairs]
+            proposed_values = [float(p["alns_freezing"][metric]) for p in pairs]
+            diff = [a - b for a, b in zip(proposed_values, control_values)]
+            mean_control = statistics.mean(control_values)
+            mean_proposed = statistics.mean(proposed_values)
+            summary.append({
+                "comparison": f"alns_freezing_vs_{control}",
+                "metric": metric,
+                "pairs": len(pairs),
+                "control_mean": f"{mean_control:.6f}",
+                "control_std": f"{statistics.stdev(control_values) if len(pairs) > 1 else 0.0:.6f}",
+                "alns_freezing_mean": f"{mean_proposed:.6f}",
+                "alns_freezing_std": f"{statistics.stdev(proposed_values) if len(pairs) > 1 else 0.0:.6f}",
+                "mean_difference": f"{statistics.mean(diff):.6f}",
+                "median_difference": f"{statistics.median(diff):.6f}",
+                "relative_change_percent": (
+                    f"{(mean_proposed - mean_control) / mean_control * 100.0:.4f}"
+                    if mean_control else ""),
+                "wilcoxon_p_two_sided": f"{_paired_test(proposed_values, control_values):.8g}",
+            })
 
+    if not summary:
+        parser.error("không có cặp alns_freezing/đối chứng hoàn chỉnh")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=summary[0])
+        writer = csv.DictWriter(handle, fieldnames=list(summary[0]))
         writer.writeheader()
         writer.writerows(summary)
-    print(f"Saved summary to {args.output}")
-    for row in summary:
-        print(row)
+    print(f"Saved {len(summary)} summaries to {args.output}")
     return 0
 
 
